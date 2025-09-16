@@ -32,14 +32,14 @@ const loadPreferences = () => {
     if (fs.existsSync(prefsPath)) {
       const data = fs.readFileSync(prefsPath, 'utf8');
       const parsed = JSON.parse(data);
-      console.log('[main] ✅ Loaded preferences from disk:', parsed);
+      console.log('[main] Loaded preferences from disk:', parsed);
       return { ...defaultPreferences, ...parsed };
     } else {
-      console.log('[main] 📄 No preferences file found, using defaults');
+      console.log('[main] No preferences file found, using defaults');
       return defaultPreferences;
     }
   } catch (error) {
-    console.warn('[main] ⚠️ Error loading preferences, using defaults:', error);
+    console.warn('[main] Error loading preferences, using defaults:', error);
     return defaultPreferences;
   }
 };
@@ -56,10 +56,10 @@ const savePreferences = (preferences: any) => {
     }
     
     fs.writeFileSync(prefsPath, JSON.stringify(preferences, null, 2), 'utf8');
-    console.log('[main] ✅ Saved preferences to disk:', preferences);
+    console.log('[main] Saved preferences to disk:', preferences);
     return true;
   } catch (error) {
-    console.error('[main] ❌ Error saving preferences:', error);
+    console.error('[main] Error saving preferences:', error);
     return false;
   }
 };
@@ -67,7 +67,7 @@ const savePreferences = (preferences: any) => {
 // Load preferences on startup
 let userPreferences = loadPreferences();
 
-// ---------- Version helper: read from package.json (fallback to app.getVersion) ----------
+// Version helper: read from package.json (fallback to app.getVersion)
 function getAppVersion(): string {
   try {
     const appRoot = process.env.APP_ROOT || path.join(__dirname, '..')
@@ -129,7 +129,6 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 
 let win: BrowserWindow | null
 let kioskWindow: BrowserWindow | null = null
-let debugWindow: BrowserWindow | null = null
 
 // Buffer for the last config to send to new windows
 let lastRiveConfig: any = null
@@ -169,162 +168,188 @@ function createWindow() {
   }
 }
 
-// Enhanced sensor and config data processing with reduced logging
+// Enhanced sensor and config data processing with detailed debugging
 function processIncomingData(doc: Record<string, any>) {
   // Static property for tracking seen unknown types
   if (!processIncomingData.seenTypes) {
     processIncomingData.seenTypes = new Set<string>();
   }
-  // Handle enhanced Rive configuration payloads
+
+  // Handle Rive configuration payloads
   if (doc.type === "rive_config") {
+    console.log("[main] ========== RIVE CONFIG DEBUG ==========");
+    console.log("[main] FULL RAW CONFIG FROM WEBSOCKET:");
+    console.log(JSON.stringify(doc, null, 2));
+    console.log("[main] =========================================");
+    
     if (VERBOSE_CONFIG_LOGGING) {
-      console.log("[main] 📋 Received Rive configuration for screenId:", doc.screenId);
+      console.log("[main] Received Rive configuration for screenId:", doc.screenId);
       
-      // Log enhanced config details
+      // Analyze the structure in detail
+      console.log("[main] CONFIG STRUCTURE ANALYSIS:");
+      console.log("- Type:", doc.type);
+      console.log("- Screen ID:", doc.screenId);
+      console.log("- Has frameConfig:", !!doc.frameConfig);
+      console.log("- frameConfig keys:", doc.frameConfig ? Object.keys(doc.frameConfig) : []);
+      
+      // Deep dive into frameConfig
+      if (doc.frameConfig) {
+        console.log("- frameConfig.canvas:", doc.frameConfig.canvas);
+        console.log("- frameConfig.background:", doc.frameConfig.background);
+        console.log("- frameConfig.rive:", doc.frameConfig.rive);
+        console.log("- frameConfig.frameConfig:", doc.frameConfig.frameConfig ? "EXISTS" : "MISSING");
+        
+        // Check nested frameConfig if it exists
+        if (doc.frameConfig.frameConfig) {
+          console.log("- frameConfig.frameConfig.canvas:", doc.frameConfig.frameConfig.canvas);
+          console.log("- frameConfig.frameConfig.background:", doc.frameConfig.frameConfig.background);
+          console.log("- frameConfig.frameConfig.rive:", doc.frameConfig.frameConfig.rive);
+        }
+      }
+      
+      console.log("- Has frameElements:", !!doc.frameElements);
+      console.log("- frameElements count:", doc.frameElements?.length || 0);
+      
       const riveConfig = doc.frameConfig?.frameConfig?.rive || doc.frameConfig?.rive;
       if (riveConfig) {
-        console.log("[main] 📋 Config details:", {
-          canvasSize: doc.frameConfig?.canvas ? `${doc.frameConfig.canvas.width}x${doc.frameConfig.canvas.height}` : 'unknown',
-          riveFile: riveConfig.file || 'none',
-          riveFileUrl: riveConfig.fileUrl || 'none',
-          riveEmbedded: riveConfig.embedded || false,
-          elementCount: doc.frameElements?.length || 0,
-          hasDiscovery: !!riveConfig.discovery,
-          stateMachines: riveConfig.discovery?.machines?.length || 0,
-          totalInputs: riveConfig.discovery?.metadata?.totalInputs || 0
-        });
+        console.log("[main] RIVE CONFIG DETAILS:");
+        console.log("- Rive enabled:", riveConfig.enabled);
+        console.log("- Rive file:", riveConfig.file);
+        console.log("- Rive fileUrl:", riveConfig.fileUrl);
+        console.log("- Has discovery:", !!riveConfig.discovery);
+        console.log("- State machines:", riveConfig.discovery?.machines?.length || 0);
+        console.log("- Total inputs:", riveConfig.discovery?.metadata?.totalInputs || 0);
         
-        // Log state machine discovery details
         if (riveConfig.discovery?.machines) {
-          console.log("[main] 🎮 State machines:", riveConfig.discovery.machines.map((m: any) => 
-            `${m.name}(${m.inputs.length} inputs)`).join(', '));
+          console.log("[main] STATE MACHINES:");
+          riveConfig.discovery.machines.forEach((machine: any, index: number) => {
+            console.log(`  ${index + 1}. ${machine.name} (${machine.inputs?.length || 0} inputs)`);
+            if (machine.inputs) {
+              machine.inputs.forEach((input: any, inputIndex: number) => {
+                console.log(`     - ${input.name} (${input.type}): ${input.currentValue}`);
+              });
+            }
+          });
         }
-        
-        // Log frame elements with Rive connections
-        const elements = doc.frameConfig?.frameElements || doc.frameElements || [];
-        const elementsWithConnections = elements.filter((el: any) => el.riveConnections?.availableInputs?.length > 0);
-        if (elementsWithConnections.length > 0) {
-          console.log(`[main] 🔗 ${elementsWithConnections.length}/${elements.length} elements have Rive connections`);
-        }
+      }
+
+      // Check for canvas dimensions specifically
+      const canvas = doc.frameConfig?.canvas || doc.frameConfig?.frameConfig?.canvas;
+      if (canvas) {
+        console.log("[main] CANVAS FOUND:");
+        console.log(`- Dimensions: ${canvas.width}x${canvas.height}`);
+        console.log("- Orientation:", canvas.orientation);
+        console.log("- Full canvas object:", canvas);
+      } else {
+        console.log("[main] ⚠️  NO CANVAS FOUND - This will cause display issues!");
+        console.log("[main] Canvas search paths checked:");
+        console.log("- doc.frameConfig.canvas:", !!doc.frameConfig?.canvas);
+        console.log("- doc.frameConfig.frameConfig.canvas:", !!doc.frameConfig?.frameConfig?.canvas);
+      }
+
+      // Check background configuration
+      const background = doc.frameConfig?.background || doc.frameConfig?.frameConfig?.background;
+      if (background) {
+        console.log("[main] BACKGROUND FOUND:");
+        console.log("- Type:", background.type);
+        console.log("- Color:", background.color);
+        console.log("- Full background object:", background);
+      } else {
+        console.log("[main] ⚠️  NO BACKGROUND FOUND");
       }
     }
     
-    // Store the latest config for new windows
+    // Store and forward config
     lastRiveConfig = doc;
     
-    // Forward config to all windows
-    safelySendToWindow(kioskWindow, "rive-config", doc);
-    safelySendToWindow(debugWindow, "rive-config", doc);
-    safelySendToWindow(win, "rive-config", doc);
+    console.log("[main] FORWARDING CONFIG TO WINDOWS...");
+    const sentToKiosk = safelySendToWindow(kioskWindow, "rive-config", doc);
+    const sentToMain = safelySendToWindow(win, "rive-config", doc);
+    
+    console.log(`[main] Config sent to kiosk: ${sentToKiosk}, main: ${sentToMain}`);
     
     if (VERBOSE_CONFIG_LOGGING) {
-      console.log("[main] ✅ Rive config forwarded to all windows");
+      console.log("[main] ========== CONFIG DEBUG END ==========");
     }
     return;
   }
 
-  // Handle enhanced Rive sensor data payloads with reduced logging
+  // Handle Rive sensor data payloads
   if (doc.type === "rive_sensor") {
     if (VERBOSE_SENSOR_LOGGING) {
-      console.log("[main] 📊 Sensor data for screenId:", doc.screenId);
+      console.log("[main] ========== SENSOR DATA DEBUG ==========");
+      console.log("[main] FULL RAW SENSOR DATA FROM WEBSOCKET:");
+      console.log(JSON.stringify(doc, null, 2));
+      console.log("[main] ============================================");
       
-      // Process comma-separated sensor tags
+      console.log("[main] Sensor data for screenId:", doc.screenId);
+      
       const sensorKeys = Object.keys(doc.sensors || {});
       const expandedSensorCount = sensorKeys.reduce((count, key) => {
         return count + key.split(',').length;
       }, 0);
       
-      console.log(`[main] 📊 ${sensorKeys.length} sensor keys → ${expandedSensorCount} individual tags`);
+      console.log(`[main] ${sensorKeys.length} sensor keys -> ${expandedSensorCount} individual tags`);
       
-      // Log only first few sensor keys to avoid spam
-      sensorKeys.slice(0, 3).forEach(sensorKey => {
+      console.log("[main] SENSOR DETAILS:");
+      sensorKeys.slice(0, 5).forEach((sensorKey, index) => {
         const sensorData = doc.sensors[sensorKey];
         const tags = sensorKey.split(',').map((tag: string) => tag.trim());
         
-        if (tags.length > 1) {
-          console.log(`[main]   🔀 "${sensorKey}" → [${tags.join(', ')}] = ${sensorData.value} ${sensorData.unit}`);
-        } else {
-          console.log(`[main]   📊 ${sensorKey}: ${sensorData.value} ${sensorData.unit}`);
-        }
+        console.log(`[main]   ${index + 1}. Key: "${sensorKey}"`);
+        console.log(`[main]      Tags: [${tags.join(', ')}]`);
+        console.log(`[main]      Value: ${sensorData.value} ${sensorData.unit || ''}`);
+        console.log(`[main]      Display: ${sensorData.displayValue || 'N/A'}`);
+        console.log(`[main]      Full data:`, sensorData);
       });
       
-      if (sensorKeys.length > 3) {
-        console.log(`[main]   ... and ${sensorKeys.length - 3} more sensors`);
+      if (sensorKeys.length > 5) {
+        console.log(`[main]   ... and ${sensorKeys.length - 5} more sensors`);
       }
+      
+      console.log("[main] ========== SENSOR DEBUG END ==========");
     }
     
     // Forward sensor data to all windows
-    safelySendToWindow(kioskWindow, "rive-sensor-data", doc);
-    safelySendToWindow(debugWindow, "rive-sensor-data", doc);
-    safelySendToWindow(win, "rive-sensor-data", doc);
+    console.log("[main] FORWARDING SENSOR DATA TO WINDOWS...");
+    const sentToKiosk = safelySendToWindow(kioskWindow, "rive-sensor-data", doc);
+    const sentToMain = safelySendToWindow(win, "rive-sensor-data", doc);
     
-    return;
-  }
-
-  // Legacy sensor processing for backward compatibility
-  if (doc.type === "sensor" && doc.sensors) {
     if (VERBOSE_SENSOR_LOGGING) {
-      console.log("[main] 📄 Processing legacy sensor format");
-    }
-    try {
-      // Get the first sensor in the payload
-      const firstSensorKey = Object.keys(doc.sensors)[0];
-      if (firstSensorKey && doc.sensors[firstSensorKey] && doc.sensors[firstSensorKey][0]) {
-        const sensorValue = parseInt(doc.sensors[firstSensorKey][0].Value, 10);
-        const sensorUnit = doc.sensors[firstSensorKey][0].Unit || "";
-        
-        if (VERBOSE_SENSOR_LOGGING) {
-          console.log(`[main] 📄 Legacy sensor: ${firstSensorKey} = ${sensorValue} ${sensorUnit}`);
-        }
-        
-        // Forward to visualization window (legacy format)
-        if (kioskWindow && !kioskWindow.isDestroyed()) {
-          kioskWindow.webContents.send("sensor-data", {
-            value: sensorValue,
-            unit: sensorUnit,
-            sensorName: firstSensorKey
-          });
-        }
-      }
-    } catch (error) {
-      console.error("[main] Error processing legacy sensor data:", error);
+      console.log(`[main] Sensor data sent to kiosk: ${sentToKiosk}, main: ${sentToMain}`);
     }
     return;
   }
 
-  // Handle other message types quietly
+  // Handle heartbeat and device connection messages silently
   if (doc.type === "heartbeat-response" || doc.type === "device-connected") {
-    // Silent handling for frequent messages
     return;
   }
 
-  // Log unknown message types for debugging (but only once per type)
+  // Log unknown message types (once per type)
   if (doc.type && !processIncomingData.seenTypes.has(doc.type)) {
     processIncomingData.seenTypes.add(doc.type);
-    console.log(`[main] ❓ Unknown message type: ${doc.type}`);
-    console.log(`[main] 📋 Message keys: ${Object.keys(doc).join(', ')}`);
+    console.log(`[main] UNKNOWN MESSAGE TYPE: ${doc.type}`);
+    console.log(`[main] Full unknown message:`, JSON.stringify(doc, null, 2));
   }
 }
 
-// Add type declaration for the function property
 declare namespace processIncomingData {
   let seenTypes: Set<string>;
 }
 
 async function startMDNSService() {
   try {
-    // Import bonjour-service directly since it's installed
     const { Bonjour } = await import('bonjour-service');
     const instance = new Bonjour();
     
     const mac = Helper_WebSocket.getFormattedMacAddress();
     const deviceName = `JunctionRelay_Virtual_${mac}`;
     
-    // Try the exact format that Tmds.MDns expects
     const httpService = instance.publish({
       name: deviceName,
-      type: 'junctionrelay',  // Try without underscores first
-      protocol: 'tcp',        // Separate protocol field
+      type: 'junctionrelay',
+      protocol: 'tcp',
       port: 80,
       txt: {
         type: 'virtual_device',
@@ -334,7 +359,6 @@ async function startMDNSService() {
       }
     });
     
-    // Also try advertising WebSocket service
     const wsService = instance.publish({
       name: `${deviceName}_WS`,
       type: 'junctionrelay-ws',
@@ -349,7 +373,7 @@ async function startMDNSService() {
     });
     
     mdnsService = { instance, httpService, wsService };
-    console.log(`[main] ✅ mDNS services started - device discoverable as ${deviceName}`);
+    console.log(`[main] mDNS services started - device discoverable as ${deviceName}`);
     
   } catch (error) {
     console.log("[main] mDNS service failed to start:", (error as Error).message);
@@ -357,7 +381,6 @@ async function startMDNSService() {
   }
 }
 
-// WebSocket server functions
 async function startWebSocketServer() {
   console.log("[main] startWebSocketServer() called");
   if (jrWs?.isRunning()) {
@@ -373,26 +396,24 @@ async function startWebSocketServer() {
       onDocument: (doc: Record<string, any>) => {
         // Send to main window for debugging
         win?.webContents.send("display:json", doc);
-        
-        // Process both legacy and enhanced data formats
+        // Process data
         processIncomingData(doc);
       },
       onProtocol: (doc: Record<string, any>) => {
         if (VERBOSE_SENSOR_LOGGING) {
-          console.log("[main] 🔌 Protocol message:", doc.type);
+          console.log("[main] Protocol message:", doc.type);
         }
         win?.webContents.send("display:protocol", doc);
       },
       onSystem: (doc: Record<string, any>) => {
-        console.log("[main] ⚙️ System message:", doc.type);
+        console.log("[main] System message:", doc.type);
         win?.webContents.send("display:system", doc);
       },
     });
 
     await jrWs.start();
-    console.log("[main] ✅ Helper_WebSocket started on :81");
+    console.log("[main] Helper_WebSocket started on :81");
     
-    // Start mDNS service discovery
     await startMDNSService();
     
     win?.webContents.send("ws-status", { ok: true, message: "WebSocket server started on :81" });
@@ -405,7 +426,6 @@ async function startWebSocketServer() {
 function stopWebSocketServer() {
   console.log("[main] stopWebSocketServer() called");
   
-  // Stop mDNS services
   if (mdnsService) {
     try {
       if (mdnsService.instance) {
@@ -428,7 +448,7 @@ function stopWebSocketServer() {
   win?.webContents.send("ws-status", { ok: true, message: "WebSocket not running." });
 }
 
-// IPC: open external URL
+// IPC handlers
 ipcMain.on('open-external', (_, url) => {
   try {
     shell.openExternal(url)
@@ -437,22 +457,19 @@ ipcMain.on('open-external', (_, url) => {
   }
 })
 
-// IPC: app version for renderer, read from package.json
 ipcMain.handle('get-app-version', () => getAppVersion())
 
-// IPC: fullscreen preference storage (now with file persistence)
 ipcMain.handle('get-fullscreen-preference', () => {
-  console.log(`[main] 📖 Retrieved fullscreen preference: ${userPreferences.fullscreenMode}`);
+  console.log(`[main] Retrieved fullscreen preference: ${userPreferences.fullscreenMode}`);
   return userPreferences.fullscreenMode;
 });
 
 ipcMain.on('save-fullscreen-preference', (_, preference: boolean) => {
   userPreferences.fullscreenMode = preference;
   const saved = savePreferences(userPreferences);
-  console.log(`[main] ${saved ? '✅' : '❌'} Saved fullscreen preference: ${preference}`);
+  console.log(`[main] ${saved ? 'Saved' : 'Failed to save'} fullscreen preference: ${preference}`);
 });
 
-// WebSocket IPC handlers
 ipcMain.on("start-ws", () => {
   startWebSocketServer();
 });
@@ -465,107 +482,30 @@ ipcMain.handle("ws-stats", () => {
   try { return jrWs?.getStats?.() ?? null; } catch { return null; }
 });
 
-// Debug Window IPC handlers
-ipcMain.on("open-debug-window", () => {
-  try {
-    console.log("[main] 🔍 Opening debug window");
-    
-    // If debug window already exists, focus it
-    if (debugWindow && !debugWindow.isDestroyed()) {
-      debugWindow.focus();
-      return;
-    }
-
-    debugWindow = new BrowserWindow({
-      width: 800,
-      height: 600,
-      title: "JunctionRelay Debug Panel",
-      webPreferences: {
-        preload: path.join(__dirname, 'preload.mjs'),
-        contextIsolation: true,
-        nodeIntegration: false,
-        webSecurity: true
-      },
-      show: false
-    });
-
-    debugWindow.on("closed", () => {
-      console.log("[main] 🔍 Debug window closed");
-      debugWindow = null;
-      if (win && !win.isDestroyed()) win.webContents.send("debug-window-closed");
-    });
-
-    debugWindow.once("ready-to-show", () => {
-      console.log("[main] 🔍 Debug window ready, showing");
-      debugWindow?.show();
-      
-      // Send any existing config data to the new debug window
-      setTimeout(() => {
-        if (lastRiveConfig && debugWindow && !debugWindow.isDestroyed()) {
-          console.log("[main] 🔍 Sending buffered config to debug window");
-          debugWindow.webContents.send("rive-config", lastRiveConfig);
-        }
-      }, 500); // Give window time to fully load
-    });
-
-    // Load with debug=true parameter
-    if (app.isPackaged) {
-      debugWindow.loadFile(path.join(RENDERER_DIST, 'index.html'), {
-        query: { debug: "true" }
-      });
-    } else if (VITE_DEV_SERVER_URL) {
-      debugWindow.loadURL(VITE_DEV_SERVER_URL + "?debug=true");
-    } else {
-      debugWindow.loadFile(path.join(RENDERER_DIST, 'index.html'), {
-        query: { debug: "true" }
-      });
-    }
-
-    if (win && !win.isDestroyed()) win.webContents.send("debug-window-opened");
-    console.log("[main] ✅ Debug window opened");
-  } catch (error) {
-    console.error("Error opening debug window:", error);
-  }
-});
-
-ipcMain.on("close-debug-window", () => {
-  if (debugWindow && !debugWindow.isDestroyed()) {
-    console.log("[main] 🔍 Closing debug window (IPC request)");
-    debugWindow.close();
-    debugWindow = null;
-    if (win && !win.isDestroyed()) win.webContents.send("debug-window-closed");
-  }
-});
-
-// IPC: open kiosk visualization
 ipcMain.on('open-visualization', (event, options = {}) => {
   try {
-    console.log("[main] 🎨 Opening visualization window with options:", options);
+    console.log("[main] Opening visualization window with options:", options);
     
-    // If visualization window already exists, focus it instead of creating new one
     if (kioskWindow && !kioskWindow.isDestroyed()) {
-      console.log("[main] 🎨 Visualization window already exists, focusing it");
+      console.log("[main] Visualization window already exists, focusing it");
       kioskWindow.focus();
       event.sender.send('visualization-opened');
       return;
     }
     
-    // Get the main window's display to ensure ViewPort opens on the same screen
     let displayBounds = null;
-    let mainWindowBounds = null;
     
     if (win && !win.isDestroyed()) {
       try {
-        mainWindowBounds = win.getBounds();
+        const mainWindowBounds = win.getBounds();
         const mainWindowDisplay = screen.getDisplayMatching(mainWindowBounds);
         displayBounds = mainWindowDisplay.bounds;
-        console.log(`[main] 🎨 Using display: ${displayBounds.width}x${displayBounds.height} at ${displayBounds.x},${displayBounds.y}`);
+        console.log(`[main] Using display: ${displayBounds.width}x${displayBounds.height} at ${displayBounds.x},${displayBounds.y}`);
       } catch (error) {
-        console.warn("[main] ⚠️ Could not get main window display, using primary:", error);
-        // Fallback to primary display
+        console.warn("[main] Could not get main window display, using primary:", error);
         const primaryDisplay = screen.getPrimaryDisplay();
         displayBounds = primaryDisplay.bounds;
-        console.log(`[main] 🎨 Using primary display: ${displayBounds.width}x${displayBounds.height} at ${displayBounds.x},${displayBounds.y}`);
+        console.log(`[main] Using primary display: ${displayBounds.width}x${displayBounds.height} at ${displayBounds.x},${displayBounds.y}`);
       }
     }
     
@@ -579,9 +519,7 @@ ipcMain.on('open-visualization', (event, options = {}) => {
       show: false,
     };
 
-    // Apply fullscreen or windowed mode based on options
     if (options.fullscreen !== false) {
-      // Fullscreen kiosk mode
       Object.assign(windowOptions, {
         fullscreen: true,
         frame: false,
@@ -590,7 +528,6 @@ ipcMain.on('open-visualization', (event, options = {}) => {
         resizable: false,
       });
       
-      // Position on the same display as main window
       if (displayBounds) {
         Object.assign(windowOptions, {
           x: displayBounds.x,
@@ -598,30 +535,41 @@ ipcMain.on('open-visualization', (event, options = {}) => {
           width: displayBounds.width,
           height: displayBounds.height,
         });
-        console.log(`[main] 🎨 Fullscreen mode: ${displayBounds.width}x${displayBounds.height}`);
+        console.log(`[main] Fullscreen mode: ${displayBounds.width}x${displayBounds.height}`);
       }
     } else {
-      // Windowed mode - use canvas dimensions if available
       let windowWidth = 1000;
       let windowHeight = 700;
       
       if (lastRiveConfig) {
+        console.log("[main] ANALYZING LAST RIVE CONFIG FOR WINDOW SIZE:");
+        console.log("[main] lastRiveConfig structure:", {
+          hasFrameConfig: !!lastRiveConfig.frameConfig,
+          frameConfigKeys: lastRiveConfig.frameConfig ? Object.keys(lastRiveConfig.frameConfig) : [],
+        });
+        
         const canvas = lastRiveConfig.frameConfig?.frameConfig?.canvas || lastRiveConfig.frameConfig?.canvas;
+        console.log("[main] Canvas search results:");
+        console.log("- frameConfig.frameConfig.canvas:", lastRiveConfig.frameConfig?.frameConfig?.canvas);
+        console.log("- frameConfig.canvas:", lastRiveConfig.frameConfig?.canvas);
+        console.log("- Final canvas used:", canvas);
+        
         if (canvas && canvas.width && canvas.height) {
           windowWidth = canvas.width;
           windowHeight = canvas.height;
-          console.log(`[main] 🎨 Using canvas dimensions: ${windowWidth}x${windowHeight}`);
+          console.log(`[main] Using canvas dimensions: ${windowWidth}x${windowHeight}`);
+        } else {
+          console.log(`[main] ⚠️  No canvas dimensions found, using default: ${windowWidth}x${windowHeight}`);
         }
       }
       
-      // Position windowed mode on the same display, centered
       let windowX = undefined;
       let windowY = undefined;
       
       if (displayBounds) {
         windowX = displayBounds.x + Math.floor((displayBounds.width - windowWidth) / 2);
         windowY = displayBounds.y + Math.floor((displayBounds.height - windowHeight) / 2);
-        console.log(`[main] 🎨 Windowed mode: ${windowWidth}x${windowHeight} at ${windowX},${windowY}`);
+        console.log(`[main] Windowed mode: ${windowWidth}x${windowHeight} at ${windowX},${windowY}`);
       }
       
       Object.assign(windowOptions, {
@@ -633,38 +581,50 @@ ipcMain.on('open-visualization', (event, options = {}) => {
         alwaysOnTop: false,
         skipTaskbar: false,
         resizable: true,
-        title: `JunctionRelay Visualization (${windowWidth}×${windowHeight})`,
+        title: `JunctionRelay Visualization (${windowWidth}x${windowHeight})`,
       });
     }
 
     kioskWindow = new BrowserWindow(windowOptions);
+
+    if (!app.isPackaged) {
+      kioskWindow.webContents.openDevTools();
+    }
 
     if (options.fullscreen !== false) {
       kioskWindow.setAlwaysOnTop(true, 'screen-saver');
     }
 
     kioskWindow.on('closed', () => {
-      console.log("[main] 🎨 Visualization window closed");
+      console.log("[main] Visualization window closed");
       kioskWindow = null
       if (win && !win.isDestroyed()) win.webContents.send('visualization-closed')
     })
 
     kioskWindow.once('ready-to-show', () => {
-      console.log("[main] 🎨 Visualization window ready, showing");
+      console.log("[main] Visualization window ready, showing");
       kioskWindow?.show()
       
-      // Send any existing config data to the new visualization window
-      setTimeout(() => {
-        if (lastRiveConfig && kioskWindow && !kioskWindow.isDestroyed()) {
-          console.log("[main] 🎨 Sending buffered config to visualization window");
-          kioskWindow.webContents.send("rive-config", lastRiveConfig);
-        }
-      }, 500); // Give window time to fully load
+      if (lastRiveConfig && kioskWindow && !kioskWindow.isDestroyed()) {
+        setTimeout(() => {
+          console.log("[main] SENDING BUFFERED CONFIG TO VISUALIZATION WINDOW:");
+          console.log("[main] Buffered config summary:", {
+            type: lastRiveConfig.type,
+            screenId: lastRiveConfig.screenId,
+            hasFrameConfig: !!lastRiveConfig.frameConfig,
+            hasCanvas: !!(lastRiveConfig.frameConfig?.canvas || lastRiveConfig.frameConfig?.frameConfig?.canvas),
+            elementCount: lastRiveConfig.frameElements?.length || 0
+          });
+          kioskWindow?.webContents.send("rive-config", lastRiveConfig);
+        }, 1000);
+      } else {
+        console.log("[main] ⚠️  No buffered config to send to visualization window");
+      }
     })
 
     kioskWindow.webContents.on('before-input-event', (_, input) => {
       if (input.key === 'Escape' && input.type === 'keyDown') {
-        console.log("[main] 🎨 Escape key pressed, closing visualization");
+        console.log("[main] Escape key pressed, closing visualization");
         kioskWindow?.close()
       }
     })
@@ -682,33 +642,30 @@ ipcMain.on('open-visualization', (event, options = {}) => {
     }
 
     event.sender.send('visualization-opened')
-    console.log("[main] ✅ Visualization window opened");
+    console.log("[main] Visualization window creation complete");
   } catch (error) {
     console.error('Error opening visualization kiosk:', error)
   }
 })
 
-// IPC: close kiosk
 ipcMain.on('close-visualization', (event) => {
   if (kioskWindow && !kioskWindow.isDestroyed()) {
-    console.log("[main] 🎨 Closing visualization window (IPC request)");
+    console.log("[main] Closing visualization window (IPC request)");
     kioskWindow.close()
     kioskWindow = null
     event.sender.send('visualization-closed')
   }
 })
 
-// IPC: quit app
 ipcMain.on('quit-app', () => {
-  console.log("[main] 🚪 Quit app requested");
+  console.log("[main] Quit app requested");
   try { stopWebSocketServer(); } catch {}
   app.quit()
 })
 
-// Quit behavior
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    console.log("[main] 🚪 All windows closed, quitting app");
+    console.log("[main] All windows closed, quitting app");
     try { stopWebSocketServer(); } catch {}
     app.quit()
     win = null
@@ -717,12 +674,12 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    console.log("[main] 📱 App activated, creating window");
+    console.log("[main] App activated, creating window");
     createWindow()
   }
 })
 
 app.whenReady().then(() => {
-  console.log("[main] 🚀 App ready, creating main window");
+  console.log("[main] App ready, creating main window");
   createWindow()
 })

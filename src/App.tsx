@@ -1,6 +1,49 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import ViewPort from "./ViewPort";
-import Debug from "./Debug";
+import { VirtualScreenViewerComponent } from "./shared/pages/VirtualScreenViewer";
+import { ElectronDataProvider } from "./ElectronDataProvider";
+import { BrowserRouter } from "react-router-dom";
+
+// FIXED: Create stable instances outside component to prevent re-creation
+const globalDataProvider = new ElectronDataProvider({
+  enabled: true
+});
+
+const globalDeviceData = {
+  name: 'JunctionRelay Virtual Device',
+  id: 'electron-virtual-device'
+};
+
+// Create a stable wrapper that won't re-create on every render
+const ElectronVisualizationWrapper = () => {
+  const [isConnected, setIsConnected] = useState(false);
+
+  useEffect(() => {
+    console.log('[ElectronVisualizationWrapper] Mounting - connecting data provider');
+    
+    // Connect only once
+    if (!isConnected) {
+      globalDataProvider.connect();
+      setIsConnected(true);
+    }
+    
+    // Cleanup function
+    return () => {
+      console.log('[ElectronVisualizationWrapper] Unmounting - cleaning up data provider');
+      globalDataProvider.cleanup();
+      setIsConnected(false);
+    };
+  }, []); // Empty deps - only run once
+
+  return (
+    <VirtualScreenViewerComponent
+      deviceId="electron-virtual-device"
+      deviceData={globalDeviceData}
+      isStandalone={true}
+      showControls={false}
+      dataProvider={globalDataProvider}
+    />
+  );
+};
 
 // Simple inline toast (non-blocking)
 function Toast({ message, type }: { message: string; type: "info" | "error" }) {
@@ -31,7 +74,6 @@ export default function App() {
   const [showUrlDialog, setShowUrlDialog] = useState(false);
   const [urlInput, setUrlInput] = useState("http://10.168.1.90:7180/");
   const [visualizationOpen, setVisualizationOpen] = useState(false);
-  const [debugWindowOpen, setDebugWindowOpen] = useState(false);
   const [fullscreenMode, setFullscreenMode] = useState(true);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "info" | "error" } | null>(null);
@@ -82,24 +124,20 @@ export default function App() {
     }
   }, []);
 
-  // Check for different modes
+  // Check for visualization mode only
   const isVisualizationMode = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("mode") === "visualization";
+    const mode = params.get("mode");
+    return mode === "visualization";
   }, []);
 
-  const isDebugMode = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("debug") === "true";
-  }, []);
-
-  // Route to appropriate component based on URL params
+  // Route to visualization component if needed
   if (isVisualizationMode) {
-    return <ViewPort />;
-  }
-
-  if (isDebugMode) {
-    return <Debug />;
+    return (
+      <BrowserRouter>
+        <ElectronVisualizationWrapper />
+      </BrowserRouter>
+    );
   }
 
   // IPC listeners + fetch version
@@ -108,8 +146,6 @@ export default function App() {
 
     const handleVisualizationOpened = () => setVisualizationOpen(true);
     const handleVisualizationClosed = () => setVisualizationOpen(false);
-    const handleDebugWindowOpened = () => setDebugWindowOpen(true);
-    const handleDebugWindowClosed = () => setDebugWindowOpen(false);
     const handleWsStatus = (_e: any, msg: { ok: boolean; message: string }) => {
       setToast({ msg: msg.message, type: msg.ok ? "info" : "error" });
       if (msg.message.includes("started") || msg.message.includes("already running")) {
@@ -147,8 +183,6 @@ export default function App() {
 
     window.ipcRenderer.on("visualization-opened", handleVisualizationOpened);
     window.ipcRenderer.on("visualization-closed", handleVisualizationClosed);
-    window.ipcRenderer.on("debug-window-opened", handleDebugWindowOpened);
-    window.ipcRenderer.on("debug-window-closed", handleDebugWindowClosed);
     window.ipcRenderer.on("ws-status", handleWsStatus);
     window.ipcRenderer.on("rive-config", handleRiveConfig);
 
@@ -157,8 +191,6 @@ export default function App() {
     return () => {
       window.ipcRenderer?.off("visualization-opened", handleVisualizationOpened);
       window.ipcRenderer?.off("visualization-closed", handleVisualizationClosed);
-      window.ipcRenderer?.off("debug-window-opened", handleDebugWindowOpened);
-      window.ipcRenderer?.off("debug-window-closed", handleDebugWindowClosed);
       window.ipcRenderer?.off("ws-status", handleWsStatus);
       window.ipcRenderer?.off("rive-config", handleRiveConfig);
     };
@@ -335,30 +367,6 @@ export default function App() {
                 {visualizationOpen ? "⏰ Close ViewPort" : "🎨 Open ViewPort"}
               </button>
             </div>
-            
-            {/* Debug Controls Row */}
-            <div style={{ display: "flex", gap: 12 }}>
-              <button 
-                style={{ 
-                  padding: "10px 14px", 
-                  cursor: "pointer",
-                  backgroundColor: debugWindowOpen ? "#dc3545" : "#6c757d",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px"
-                }} 
-                onClick={() => {
-                  console.log("[App] Debug button clicked, debugWindowOpen:", debugWindowOpen);
-                  if (debugWindowOpen) {
-                    closeDebugWindow();
-                  } else {
-                    openDebugWindow();
-                  }
-                }}
-              >
-                {debugWindowOpen ? "❌ Close Debug" : "🛠 Launch Debug"}
-              </button>
-            </div>
           </div>
         </section>
       </main>
@@ -482,4 +490,4 @@ export default function App() {
       {toast && <Toast message={toast.msg} type={toast.type} />}
     </div>
   );
-}
+}  
