@@ -1,7 +1,7 @@
 /*
  * ElectronDataProvider.ts
  * 
- * Clean implementation - Step 1: Basic logging and interface compliance
+ * Singleton implementation - only one instance exists globally
  */
 
 import {
@@ -17,10 +17,11 @@ interface ElectronDataProviderOptions {
 }
 
 export class ElectronDataProvider implements VirtualDisplayDataProvider {
+    private static instance: ElectronDataProvider | null = null;
+    
     private enabled: boolean = true;
     private connectionStatus: ConnectionStatus = 'disconnected';
     private deviceId?: string;
-    private isMounted: boolean = true;
 
     // Callback storage
     private configCallbacks: Array<(config: RiveConfig) => void> = [];
@@ -43,11 +44,28 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
         timestamp: string;
     } | null = null;
 
-    constructor(options: ElectronDataProviderOptions = {}) {
+    // Private constructor for singleton pattern
+    private constructor(options: ElectronDataProviderOptions = {}) {
         this.deviceId = options.deviceId;
         this.enabled = options.enabled ?? true;
 
-        console.log(`[ElectronDataProvider] Initialized for device: ${this.deviceId || 'any'}`);
+        console.log(`[ElectronDataProvider] Singleton instance initialized for device: ${this.deviceId || 'any'}`);
+    }
+
+    // Singleton accessor
+    public static getInstance(options?: ElectronDataProviderOptions): ElectronDataProvider {
+        if (!ElectronDataProvider.instance) {
+            ElectronDataProvider.instance = new ElectronDataProvider(options);
+        }
+        return ElectronDataProvider.instance;
+    }
+
+    // Reset singleton (useful for testing or app restart)
+    public static resetInstance(): void {
+        if (ElectronDataProvider.instance) {
+            ElectronDataProvider.instance.cleanup();
+            ElectronDataProvider.instance = null;
+        }
     }
 
     // Interface implementation
@@ -93,6 +111,12 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
             return;
         }
 
+        // Only connect if not already connected
+        if (this.connectionStatus === 'connected') {
+            console.log('[ElectronDataProvider] Already connected');
+            return;
+        }
+
         console.log('[ElectronDataProvider] Connecting to IPC...');
         this.setConnectionStatus('connecting');
         this.setupIPCListeners();
@@ -100,9 +124,9 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
     }
 
     disconnect(): void {
-        console.log('[ElectronDataProvider] Disconnecting from IPC...');
-        this.teardownIPCListeners();
-        this.setConnectionStatus('disconnected');
+        console.log('[ElectronDataProvider] Disconnect requested - keeping singleton alive');
+        // Don't actually disconnect in singleton mode unless explicitly cleaned up
+        // This prevents the timing issue with React remounts
     }
 
     isConnected(): boolean {
@@ -110,9 +134,9 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
     }
 
     cleanup(): void {
-        console.log('[ElectronDataProvider] Cleaning up...');
-        this.isMounted = false;
+        console.log('[ElectronDataProvider] Cleaning up singleton...');
         this.teardownIPCListeners();
+        this.setConnectionStatus('disconnected');
 
         // Clear all callbacks
         this.configCallbacks = [];
@@ -122,7 +146,7 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
 
     // Private methods
     private setConnectionStatus(status: ConnectionStatus): void {
-        if (this.connectionStatus !== status && this.isMounted) {
+        if (this.connectionStatus !== status) {
             console.log(`[ElectronDataProvider] Connection status: ${this.connectionStatus} -> ${status}`);
             this.connectionStatus = status;
             this.statusCallbacks.forEach((callback) => {
@@ -138,13 +162,18 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
     private setupIPCListeners(): void {
         if (!window.ipcRenderer) return;
 
+        // Prevent duplicate listeners
+        if (this.handleRiveConfig) {
+            console.log('[ElectronDataProvider] IPC listeners already setup');
+            return;
+        }
+
         console.log('[ElectronDataProvider] Setting up IPC listeners...');
 
         // Set up event handlers
         this.handleRiveConfig = (_event: any, data: any) => {
-            if (!this.isMounted) return;
             console.log('\n' + '='.repeat(80));
-            console.log('[ElectronDataProvider] 📋 INCOMING CONFIG EVENT (rive-config)');
+            console.log('[ElectronDataProvider] 📋 RECEIVED CONFIG EVENT (rive-config)');
             console.log('='.repeat(80));
             console.log(JSON.stringify(data, null, 2));
             console.log('='.repeat(80) + '\n');
@@ -157,9 +186,8 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
         };
 
         this.handleSensorData = (_event: any, data: any) => {
-            if (!this.isMounted) return;
             console.log('\n' + '='.repeat(80));
-            console.log('[ElectronDataProvider] 📊 INCOMING SENSOR EVENT (rive-sensor-data)');
+            console.log('[ElectronDataProvider] 📊 RECEIVED SENSOR EVENT (rive-sensor-data)');
             console.log('='.repeat(80));
             console.log(JSON.stringify(data, null, 2));
             console.log('='.repeat(80) + '\n');
@@ -172,7 +200,6 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
         };
 
         this.handleDisplayJson = (_event: any, data: any) => {
-            if (!this.isMounted) return;
             console.log('\n' + '='.repeat(80));
             console.log('[ElectronDataProvider] 📡 INCOMING DISPLAY EVENT (display:json)');
             console.log(`Type: ${data?.type || 'unknown'}`);
@@ -266,8 +293,6 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
 
     // Data transformation methods
     private processConfigData(rawConfig: any): void {
-        if (!this.isMounted) return;
-        
         try {
             console.log('[ElectronDataProvider] Transforming config...');
             
@@ -304,8 +329,6 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
     }
 
     private processSensorData(rawSensorData: any): void {
-        if (!this.isMounted) return;
-        
         try {
             console.log('[ElectronDataProvider] Transforming sensor data...');
             
