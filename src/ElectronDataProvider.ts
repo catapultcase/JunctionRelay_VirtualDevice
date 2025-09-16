@@ -1,8 +1,7 @@
 /*
  * ElectronDataProvider.ts
  * 
- * Implements VirtualDisplayDataProvider interface for Electron IPC communication.
- * Translates Electron IPC events to the expected callback pattern for VirtualScreenViewer.
+ * Clean implementation - Step 1: Basic logging and interface compliance
  */
 
 import {
@@ -32,6 +31,17 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
     private handleRiveConfig?: (event: any, data: any) => void;
     private handleSensorData?: (event: any, data: any) => void;
     private handleDisplayJson?: (event: any, data: any) => void;
+
+    // Stream record to simulate backend DeviceStreamResponse
+    private streamRecord: {
+        deviceId: string;
+        deviceName: string;
+        screenId: string;
+        configPayload: any;
+        sensorPayload: any;
+        lastUpdate: string;
+        timestamp: string;
+    } | null = null;
 
     constructor(options: ElectronDataProviderOptions = {}) {
         this.deviceId = options.deviceId;
@@ -133,24 +143,44 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
         // Set up event handlers
         this.handleRiveConfig = (_event: any, data: any) => {
             if (!this.isMounted) return;
-            console.log('[ElectronDataProvider] Received rive-config event');
+            console.log('\n' + '='.repeat(80));
+            console.log('[ElectronDataProvider] 📋 INCOMING CONFIG EVENT (rive-config)');
+            console.log('='.repeat(80));
+            console.log(JSON.stringify(data, null, 2));
+            console.log('='.repeat(80) + '\n');
+            
+            // Update stream record
+            this.updateStreamConfig(data);
+            
+            // Transform and forward to callbacks
             this.processConfigData(data);
         };
 
         this.handleSensorData = (_event: any, data: any) => {
             if (!this.isMounted) return;
-            console.log('[ElectronDataProvider] Received rive-sensor-data event');
+            console.log('\n' + '='.repeat(80));
+            console.log('[ElectronDataProvider] 📊 INCOMING SENSOR EVENT (rive-sensor-data)');
+            console.log('='.repeat(80));
+            console.log(JSON.stringify(data, null, 2));
+            console.log('='.repeat(80) + '\n');
+            
+            // Update stream record
+            this.updateStreamSensor(data);
+            
+            // Transform and forward to callbacks
             this.processSensorData(data);
         };
 
         this.handleDisplayJson = (_event: any, data: any) => {
             if (!this.isMounted) return;
-            console.log('[ElectronDataProvider] Received display:json event, type:', data?.type);
-            if (data.type === 'rive_config') {
-                this.processConfigData(data);
-            } else if (data.type === 'rive_sensor') {
-                this.processSensorData(data);
-            }
+            console.log('\n' + '='.repeat(80));
+            console.log('[ElectronDataProvider] 📡 INCOMING DISPLAY EVENT (display:json)');
+            console.log(`Type: ${data?.type || 'unknown'}`);
+            console.log('='.repeat(80));
+            console.log(JSON.stringify(data, null, 2));
+            console.log('='.repeat(80) + '\n');
+            
+            // TODO: Route based on type and transform
         };
 
         // Register listeners
@@ -178,20 +208,88 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
             window.ipcRenderer.off("display:json", this.handleDisplayJson);
             this.handleDisplayJson = undefined;
         }
+
+        console.log('[ElectronDataProvider] IPC listeners removed');
     }
 
+    // Stream record management - simulates backend DeviceStreamResponse
+    private updateStreamConfig(configData: any): void {
+        const now = new Date().toISOString();
+        
+        if (!this.streamRecord) {
+            this.streamRecord = {
+                deviceId: this.deviceId || 'electron-virtual-device',
+                deviceName: 'JunctionRelay Virtual Device (Electron)',
+                screenId: configData.screenId || 'default',
+                configPayload: null,
+                sensorPayload: null,
+                lastUpdate: now,
+                timestamp: now
+            };
+        }
+
+        this.streamRecord.configPayload = configData;
+        this.streamRecord.screenId = configData.screenId || this.streamRecord.screenId;
+        this.streamRecord.lastUpdate = now;
+        this.streamRecord.timestamp = now;
+
+        console.log('[ElectronDataProvider] Updated stream record with config');
+    }
+
+    private updateStreamSensor(sensorData: any): void {
+        const now = new Date().toISOString();
+        
+        if (!this.streamRecord) {
+            this.streamRecord = {
+                deviceId: this.deviceId || 'electron-virtual-device',
+                deviceName: 'JunctionRelay Virtual Device (Electron)',
+                screenId: sensorData.screenId || 'default',
+                configPayload: null,
+                sensorPayload: null,
+                lastUpdate: now,
+                timestamp: now
+            };
+        }
+
+        this.streamRecord.sensorPayload = sensorData;
+        this.streamRecord.screenId = sensorData.screenId || this.streamRecord.screenId;
+        this.streamRecord.lastUpdate = now;
+        this.streamRecord.timestamp = now;
+
+        console.log('[ElectronDataProvider] Updated stream record with sensor data');
+    }
+
+    // Get current stream record (simulates GET /api/connections/device/{deviceId})
+    getDeviceStreamResponse() {
+        return this.streamRecord;
+    }
+
+    // Data transformation methods
     private processConfigData(rawConfig: any): void {
         if (!this.isMounted) return;
         
         try {
-            console.log('[ElectronDataProvider] RAW CONFIG RECEIVED:');
-            console.log(JSON.stringify(rawConfig, null, 2));
+            console.log('[ElectronDataProvider] Transforming config...');
             
-            // Transform the Electron format to VirtualDisplayDataProvider format
-            const transformedConfig = this.transformConfigFormat(rawConfig);
-            
-            console.log('[ElectronDataProvider] TRANSFORMED CONFIG:');
-            console.log(JSON.stringify(transformedConfig, null, 2));
+            // Transform to the format VirtualScreenViewer expects
+            const transformedConfig: RiveConfig = {
+                type: "rive_config",
+                screenId: rawConfig.screenId || "default",
+                frameConfig: {
+                    // VirtualScreenViewer checks both paths - provide both
+                    frameConfig: rawConfig.frameConfig?.frameConfig || rawConfig.frameConfig,
+                    ...(rawConfig.frameConfig?.frameConfig || rawConfig.frameConfig)  // Spread at top level too
+                },
+                frameElements: rawConfig.frameElements || []
+            };
+
+            // Extract Rive file URL for BackgroundRenderer
+            const riveConfig = rawConfig.frameConfig?.frameConfig?.rive || rawConfig.frameConfig?.rive;
+            if (riveConfig?.fileUrl) {
+                (transformedConfig as any).riveFile = riveConfig.fileUrl;
+            }
+
+            console.log('[ElectronDataProvider] Transformed config, calling callbacks');
             
             this.configCallbacks.forEach((callback) => {
                 try {
@@ -209,14 +307,16 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
         if (!this.isMounted) return;
         
         try {
-            console.log('[ElectronDataProvider] RAW SENSOR DATA RECEIVED:');
-            console.log(JSON.stringify(rawSensorData, null, 2));
+            console.log('[ElectronDataProvider] Transforming sensor data...');
             
-            // Transform the Electron format to VirtualDisplayDataProvider format
-            const transformedData = this.transformSensorFormat(rawSensorData);
-            
-            console.log('[ElectronDataProvider] TRANSFORMED SENSOR DATA:');
-            console.log(JSON.stringify(transformedData, null, 2));
+            // Minimal transformation - the structure already matches what we need
+            const transformedData: SensorPayload = {
+                type: "rive_sensor",
+                screenId: rawSensorData.screenId || "default",
+                sensors: rawSensorData.sensors || {}
+            };
+
+            console.log('[ElectronDataProvider] Transformed sensor data, calling callbacks');
             
             this.sensorCallbacks.forEach((callback) => {
                 try {
@@ -229,152 +329,4 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
             console.error('[ElectronDataProvider] Error processing sensor data:', error);
         }
     }
-
-    private transformConfigFormat(electronConfig: any): RiveConfig {
-        console.log('[ElectronDataProvider] TRANSFORM CONFIG - Input analysis:', {
-            type: electronConfig.type,
-            screenId: electronConfig.screenId,
-            hasFrameConfig: !!electronConfig.frameConfig,
-            frameConfigKeys: electronConfig.frameConfig ? Object.keys(electronConfig.frameConfig) : [],
-            hasFrameElements: !!electronConfig.frameElements,
-            elementCount: electronConfig.frameElements?.length || 0,
-            
-            // Deep inspection of frameConfig structure
-            frameConfigStructure: this.analyzeFrameConfigStructure(electronConfig.frameConfig)
-        });
-
-        // FIXED: Handle the nested frameConfig structure properly
-        let actualFrameConfig = electronConfig.frameConfig || {};
-        
-        // If frameConfig has a nested frameConfig, use the nested one (it has the real data)
-        if (actualFrameConfig.frameConfig && typeof actualFrameConfig.frameConfig === 'object') {
-            console.log('[ElectronDataProvider] FOUND NESTED frameConfig - using nested data');
-            actualFrameConfig = actualFrameConfig.frameConfig;
-        }
-        
-        console.log('[ElectronDataProvider] TRANSFORM CONFIG - Using frameConfig:');
-        console.log(JSON.stringify(actualFrameConfig, null, 2));
-        
-        // Build the result with the exact nesting VirtualScreenViewer expects
-        const result: RiveConfig = {
-            type: "rive_config",
-            screenId: electronConfig.screenId || "default",
-            frameConfig: {
-                // VirtualScreenViewer checks both paths - provide both
-                frameConfig: actualFrameConfig,
-                ...actualFrameConfig  // Spread the actual config at top level too
-            },
-            frameElements: electronConfig.frameElements || []
-        };
-
-        // Extract Rive file for BackgroundRenderer
-        const riveConfig = actualFrameConfig?.rive;
-        
-        console.log('[ElectronDataProvider] TRANSFORM CONFIG - Rive config search:', {
-            foundRiveConfig: !!riveConfig,
-            riveConfigKeys: riveConfig ? Object.keys(riveConfig) : [],
-            file: riveConfig?.file,
-            fileUrl: riveConfig?.fileUrl
-        });
-        
-        if (riveConfig?.file || riveConfig?.fileUrl) {
-            let riveFileUrl = riveConfig.fileUrl || riveConfig.file;
-            
-            // Ensure it's a full URL for BackgroundRenderer
-            if (riveFileUrl && !riveFileUrl.startsWith('http')) {
-                riveFileUrl = `http://localhost:7180/api/frameengine/rive-files/${riveFileUrl}/content`;
-            }
-            
-            // Add to top level for BackgroundRenderer to find
-            (result as any).riveFile = riveFileUrl;
-            
-            console.log('[ElectronDataProvider] TRANSFORM CONFIG - Set riveFile at top level:', riveFileUrl);
-        }
-
-        console.log('[ElectronDataProvider] TRANSFORM CONFIG - Final result analysis:', {
-            type: result.type,
-            screenId: result.screenId,
-            hasNestedFrameConfig: !!result.frameConfig?.frameConfig,
-            hasTopLevelCanvas: !!result.frameConfig?.canvas,
-            hasNestedCanvas: !!result.frameConfig?.frameConfig?.canvas,
-            canvasFromTopLevel: result.frameConfig?.canvas ? 
-                `${result.frameConfig.canvas.width}x${result.frameConfig.canvas.height}` : 'none',
-            canvasFromNested: result.frameConfig?.frameConfig?.canvas ? 
-                `${result.frameConfig.frameConfig.canvas.width}x${result.frameConfig.frameConfig.canvas.height}` : 'none',
-            elementCount: result.frameElements?.length || 0,
-            topLevelRiveFile: (result as any).riveFile,
-            
-            // Background analysis
-            backgroundFromTopLevel: result.frameConfig?.background,
-            backgroundFromNested: result.frameConfig?.frameConfig?.background
-        });
-
-        return result;
-    }
-
-    private analyzeFrameConfigStructure(frameConfig: any): any {
-        if (!frameConfig) return null;
-        
-        return {
-            keys: Object.keys(frameConfig),
-            hasCanvas: !!frameConfig.canvas,
-            hasBackground: !!frameConfig.background,
-            hasRive: !!frameConfig.rive,
-            hasNestedFrameConfig: !!frameConfig.frameConfig,
-            
-            // Canvas details
-            canvas: frameConfig.canvas ? {
-                width: frameConfig.canvas.width,
-                height: frameConfig.canvas.height,
-                orientation: frameConfig.canvas.orientation
-            } : null,
-            
-            // Background details
-            background: frameConfig.background ? {
-                type: frameConfig.background.type,
-                color: frameConfig.background.color
-            } : null,
-            
-            // Rive details
-            rive: frameConfig.rive ? {
-                enabled: frameConfig.rive.enabled,
-                file: frameConfig.rive.file,
-                fileUrl: frameConfig.rive.fileUrl,
-                hasDiscovery: !!frameConfig.rive.discovery
-            } : null,
-            
-            // Nested structure if exists
-            nested: frameConfig.frameConfig ? this.analyzeFrameConfigStructure(frameConfig.frameConfig) : null
-        };
-    }
-
-    private transformSensorFormat(electronSensorData: any): SensorPayload {
-        console.log('[ElectronDataProvider] TRANSFORM SENSOR - Input:', {
-            type: electronSensorData.type,
-            screenId: electronSensorData.screenId,
-            sensorsCount: electronSensorData.sensors ? Object.keys(electronSensorData.sensors).length : 0,
-            sensorsKeys: electronSensorData.sensors ? Object.keys(electronSensorData.sensors) : []
-        });
-        
-        // Minimal transformation - preserve the original structure
-        const result: SensorPayload = {
-            type: "rive_sensor",
-            screenId: electronSensorData.screenId || "default",
-            sensors: electronSensorData.sensors || {}
-        };
-
-        console.log('[ElectronDataProvider] TRANSFORM SENSOR - Result:', {
-            type: result.type,
-            screenId: result.screenId,
-            sensorsCount: Object.keys(result.sensors).length,
-            firstThreeSensors: Object.entries(result.sensors).slice(0, 3).map(([key, value]: [string, any]) => ({
-                key,
-                value: value?.value,
-                unit: value?.unit,
-                displayValue: value?.displayValue
-            }))
-        });
-
-        return result;
-    }
-} 
+}

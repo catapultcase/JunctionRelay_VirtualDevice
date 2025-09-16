@@ -17,14 +17,6 @@ export class Helper_StreamProcessor {
   private messagesProcessed = 0;
   private errorCount = 0;
 
-  // Debug control - set to false to reduce console spam
-  private static readonly VERBOSE_SENSOR_LOGGING = false;
-  private static readonly VERBOSE_CONFIG_LOGGING = true;
-  private static readonly VERBOSE_ROUTING_LOGGING = false;
-
-  // Static property for tracking seen unknown types
-  private static seenUnknownTypes: Set<string> = new Set();
-
   // Limits (raise if you push big frames)
   private readonly MAX_PAYLOAD_SIZE = 8 * 1024 * 1024; // 8 MB
 
@@ -67,8 +59,7 @@ export class Helper_StreamProcessor {
       return;
     }
 
-    // Unknown – ignore quietly to match ESP32 tolerance
-    // (You can console.warn here if preferred)
+    // Unknown – ignore quietly
   }
 
   // ---------- Private ----------
@@ -85,7 +76,7 @@ export class Helper_StreamProcessor {
       const out = await pGunzip(buf);
       const doc = this.tryParseJSON(out);
       if (!doc) return;
-      this.forward(doc, /*srcType*/ 3);
+      this.forward(doc);
       this.messagesProcessed++;
     } catch (e) {
       console.error("[StreamProcessor] ERROR: Failed to gunzip raw gzip:", (e as Error).message);
@@ -97,7 +88,6 @@ export class Helper_StreamProcessor {
     // Prefix LLLLTTRR as ASCII digits
     const lengthHint = parseInt(buf.toString("ascii", 0, 4), 10); // 0000 → auto
     const typeField = parseInt(buf.toString("ascii", 4, 6), 10);  // 00 JSON, 01 Gzip
-    const routeField = parseInt(buf.toString("ascii", 6, 8), 10); // not used here, but kept
 
     if (!(typeField === 0 || typeField === 1)) {
       console.error("[StreamProcessor] ERROR: Invalid type field:", typeField);
@@ -123,7 +113,7 @@ export class Helper_StreamProcessor {
       // Prefixed JSON
       const doc = this.tryParseJSON(payload);
       if (!doc) return;
-      this.forward(doc, /*srcType*/ 2, routeField);
+      this.forward(doc);
       this.messagesProcessed++;
     } else {
       // Prefixed Gzip
@@ -131,7 +121,7 @@ export class Helper_StreamProcessor {
         const out = await pGunzip(payload);
         const doc = this.tryParseJSON(out);
         if (!doc) return;
-        this.forward(doc, /*srcType*/ 4, routeField);
+        this.forward(doc);
         this.messagesProcessed++;
       } catch (e) {
         console.error("[StreamProcessor] ERROR: Failed to gunzip prefixed gzip:", (e as Error).message);
@@ -140,93 +130,16 @@ export class Helper_StreamProcessor {
     }
   }
 
-  private forward(doc: JsonDoc, _srcType?: number, _route?: number) {
+  private forward(doc: JsonDoc) {
     const t = doc?.type as string | undefined;
-    
-    // Enhanced logging for rive messages (controlled by debug flags)
+
+    // Simple forwarding based on type - no complex routing or analysis
     if (t === "rive_config" || t === "rive_sensor") {
-      if (t === "rive_config" && Helper_StreamProcessor.VERBOSE_CONFIG_LOGGING) {
-        console.log(`[StreamProcessor] Processing ${t} for screenId: ${doc.screenId}`);
-        
-        // Log enhanced config structure
-        const riveConfig = doc.frameConfig?.frameConfig?.rive || doc.frameConfig?.rive;
-        if (riveConfig?.discovery) {
-          console.log(`[StreamProcessor] Rive discovery: ${riveConfig.discovery.machines.length} machines, ${riveConfig.discovery.metadata.totalInputs} inputs`);
-          riveConfig.discovery.machines.forEach((machine: any) => {
-            console.log(`[StreamProcessor]   Machine "${machine.name}": ${machine.inputs.length} inputs`);
-          });
-        }
-        
-        // Log frame elements with Rive connections
-        const elements = doc.frameConfig?.frameElements || doc.frameElements || [];
-        const elementsWithConnections = elements.filter((el: any) => el.riveConnections?.availableInputs?.length > 0);
-        console.log(`[StreamProcessor] ${elements.length} frame elements, ${elementsWithConnections.length} with Rive connections`);
-      }
-      
-      if (t === "rive_sensor" && Helper_StreamProcessor.VERBOSE_SENSOR_LOGGING) {
-        console.log(`[StreamProcessor] Processing ${t} for screenId: ${doc.screenId}`);
-        
-        // Log enhanced sensor data with comma-separated tags
-        const sensorKeys = Object.keys(doc.sensors || {});
-        const totalTags = sensorKeys.reduce((count, key) => {
-          return count + key.split(',').length;
-        }, 0);
-        console.log(`[StreamProcessor] Sensor data: ${sensorKeys.length} sensor keys expanding to ${totalTags} individual tags`);
-        
-        // Only log first few multi-tags to avoid spam
-        const multiTags = sensorKeys.filter(key => key.split(',').length > 1);
-        multiTags.slice(0, 2).forEach(key => {
-          const tags = key.split(',').map(t => t.trim());
-          console.log(`[StreamProcessor]   Multi-tag: "${key}" → [${tags.join(', ')}]`);
-        });
-        
-        if (multiTags.length > 2) {
-          console.log(`[StreamProcessor]   ... and ${multiTags.length - 2} more multi-tags`);
-        }
-      }
-    }
-
-    // Destination handling parity with ESP32
-    const dest = doc?.destination as string | undefined;
-    const localMac = Helper_StreamProcessor.getFormattedMacAddress();
-    if (dest && localMac && dest.toLowerCase() !== localMac.toLowerCase()) {
-      // Remote destination → protocolCallback
-      if (Helper_StreamProcessor.VERBOSE_ROUTING_LOGGING) {
-        console.log(`[StreamProcessor] Routing ${t} to Protocol callback (remote destination)`);
-      }
-      this.callbacks.onProtocol?.(doc);
-      return;
-    }
-    if (dest && localMac && dest.toLowerCase() === localMac.toLowerCase()) {
-      // Self – strip destination
-      delete doc.destination;
-    }
-
-    // Type-based routing (sensor/config/system/protocol)
-    if (!t) {
-      if (Helper_StreamProcessor.VERBOSE_ROUTING_LOGGING) {
-        console.log(`[StreamProcessor] Routing unknown type to System+Document callbacks`);
-      }
-      this.callbacks.onSystem?.(doc);
-      this.callbacks.onDocument?.(doc);
-      return;
-    }
-
-    // Enhanced Rive message routing with controlled logging
-    if (t === "rive_config" || t === "rive_sensor") {
-      if (Helper_StreamProcessor.VERBOSE_ROUTING_LOGGING) {
-        console.log(`[StreamProcessor] Routing ${t} to Document callback for renderer processing`);
-      }
       this.callbacks.onDocument?.(doc);
       return;
     }
 
     if (t === "sensor" || t === "config") {
-      // In the ESP32 this would route to ScreenRouter queues.
-      // Here we surface to both: renderer and (optionally) system.
-      if (Helper_StreamProcessor.VERBOSE_ROUTING_LOGGING) {
-        console.log(`[StreamProcessor] Routing ${t} to Document callback`);
-      }
       this.callbacks.onDocument?.(doc);
       return;
     }
@@ -238,9 +151,6 @@ export class Helper_StreamProcessor {
       t === "espnow_message" ||
       t === "peer_management"
     ) {
-      if (Helper_StreamProcessor.VERBOSE_ROUTING_LOGGING) {
-        console.log(`[StreamProcessor] Routing ${t} to Protocol callback`);
-      }
       this.callbacks.onProtocol?.(doc);
       return;
     }
@@ -251,28 +161,16 @@ export class Helper_StreamProcessor {
       t === "stats" ||
       t === "device_info" ||
       t === "device_capabilities" ||
-      t === "system_command"
+      t === "system_command" ||
+      t === "heartbeat-response" ||
+      t === "device-connected"
     ) {
-      if (Helper_StreamProcessor.VERBOSE_ROUTING_LOGGING) {
-        console.log(`[StreamProcessor] Routing ${t} to System+Document callbacks`);
-      }
       this.callbacks.onSystem?.(doc);
       this.callbacks.onDocument?.(doc);
       return;
     }
 
-    // Heartbeat and frequent messages - handle silently
-    if (t === "heartbeat-response" || t === "device-connected") {
-      this.callbacks.onSystem?.(doc);
-      this.callbacks.onDocument?.(doc);
-      return;
-    }
-
-    // Unknown → treat like system (log once per type)
-    if (!Helper_StreamProcessor.seenUnknownTypes.has(t)) {
-      Helper_StreamProcessor.seenUnknownTypes.add(t);
-      console.log(`[StreamProcessor] Unknown message type '${t}', routing to System callback`);
-    }
+    // Unknown → treat like system
     this.callbacks.onSystem?.(doc);
     this.callbacks.onDocument?.(doc);
   }
@@ -309,7 +207,6 @@ export class Helper_StreamProcessor {
     }
     // Fallback to host hash-like
     const h = hostname().toUpperCase();
-    // Create pseudo-MAC AA:– from hostname chars
     const pad = (s: string) => s.padEnd(12, "0").slice(0, 12);
     const hex = Buffer.from(pad(h)).toString("hex").slice(0, 12).toUpperCase();
     this.cachedMac = hex.match(/.{1,2}/g)?.join(":") ?? "00:00:00:00:00:00";
@@ -324,7 +221,7 @@ export class Helper_StreamProcessor {
       mac: this.getFormattedMacAddress(),
       ip: Helper_StreamProcessor.getLocalIPv4(),
       uptime: Math.floor(uptime() * 1000),
-      freeHeap: freemem(), // "free-ish" bytes
+      freeHeap: freemem(),
       firmware: process.env.npm_package_version || "0.0.0",
       platform: platform(),
     };

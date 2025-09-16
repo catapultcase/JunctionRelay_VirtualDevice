@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { VirtualScreenViewerComponent } from "./shared/pages/VirtualScreenViewer";
 import { ElectronDataProvider } from "./ElectronDataProvider";
 import { BrowserRouter } from "react-router-dom";
 
-// FIXED: Create stable instances outside component to prevent re-creation
+// Create stable instances outside component to prevent re-creation
 const globalDataProvider = new ElectronDataProvider({
   enabled: true
 });
@@ -124,15 +124,11 @@ export default function App() {
     }
   }, []);
 
-  // Check for visualization mode only
-  const isVisualizationMode = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    const mode = params.get("mode");
-    return mode === "visualization";
-  }, []);
+  // Check for visualization mode (now just for window detection, not routing)
+  const isVisualizationWindow = new URLSearchParams(window.location.search).get("mode") === "visualization";
 
-  // Route to visualization component if needed
-  if (isVisualizationMode) {
+  // If this is the visualization window, render the visualization directly
+  if (isVisualizationWindow) {
     return (
       <BrowserRouter>
         <ElectronVisualizationWrapper />
@@ -223,24 +219,6 @@ export default function App() {
     }
   };
 
-  const openDebugWindow = () => {
-    if (!window.ipcRenderer) return setToast({ msg: "ipcRenderer unavailable.", type: "error" });
-    try {
-      window.ipcRenderer.send("open-debug-window");
-    } catch {
-      setToast({ msg: "Failed to open debug window.", type: "error" });
-    }
-  };
-
-  const closeDebugWindow = () => {
-    if (!window.ipcRenderer) return setToast({ msg: "ipcRenderer unavailable.", type: "error" });
-    try {
-      window.ipcRenderer.send("close-debug-window");
-    } catch {
-      setToast({ msg: "Failed to close debug window.", type: "error" });
-    }
-  };
-
   const handleOpenUrl = () => {
     if (!window.ipcRenderer) return setToast({ msg: "ipcRenderer unavailable.", type: "error" });
     if (!urlInput.trim()) return setToast({ msg: "Please enter a URL.", type: "info" });
@@ -265,6 +243,7 @@ export default function App() {
 
   const handleCancelUrl = () => setShowUrlDialog(false);
 
+  // Main app UI (control panel)
   return (
     <div
       style={{
@@ -490,4 +469,4 @@ export default function App() {
       {toast && <Toast message={toast.msg} type={toast.type} />}
     </div>
   );
-}  
+}
