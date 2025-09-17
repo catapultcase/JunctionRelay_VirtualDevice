@@ -8,68 +8,6 @@ const deviceData = {
   id: 'electron-virtual-device'
 };
 
-const ElectronVisualizationWrapper = () => {
-  useEffect(() => {
-    console.log('[ElectronVisualizationWrapper] Mounting');
-    const provider = ElectronDataProvider.getInstance({
-      enabled: true,
-      deviceId: 'electron-virtual-device'
-    });
-    provider.connect();
-
-    // Check if provider already has cached data and reprocess it
-    const existingStreamData = provider.getDeviceStreamResponse();
-    console.log('[ElectronVisualizationWrapper] Checking for cached data:', existingStreamData);
-    
-    if (existingStreamData) {
-      console.log('[ElectronVisualizationWrapper] Found existing stream data');
-      
-      // Reprocess config data if available
-      if (existingStreamData.configPayload) {
-        console.log('[ElectronVisualizationWrapper] Found cached config, reprocessing:', existingStreamData.configPayload.type);
-        provider.reprocessCachedConfig();
-      } else {
-        console.log('[ElectronVisualizationWrapper] No cached config found');
-      }
-      
-      // Reprocess sensor data if available
-      if (existingStreamData.sensorPayload) {
-        console.log('[ElectronVisualizationWrapper] Found cached sensor data, reprocessing');
-        provider.reprocessCachedSensorData();
-      } else {
-        console.log('[ElectronVisualizationWrapper] No cached sensor data found');
-      }
-    } else {
-      console.log('[ElectronVisualizationWrapper] No cached stream data found');
-    }
-
-    // Listen for new updates
-    const unsubscribeConfig = provider.onConfigurationReceived((config) => {
-      console.log('[ElectronVisualizationWrapper] New config received:', config.type);
-    });
-
-    const unsubscribeSensor = provider.onSensorDataReceived((data) => {
-      console.log('[ElectronVisualizationWrapper] New sensor data received:', data.type);
-    });
-    
-    return () => {
-      console.log('[ElectronVisualizationWrapper] Unmounting - singleton persists');
-      unsubscribeConfig();
-      unsubscribeSensor();
-    };
-  }, []);
-
-  return (
-    <VirtualScreenViewerComponent
-      deviceId="electron-virtual-device"
-      deviceData={deviceData}
-      isStandalone={true}
-      showControls={false}
-      dataProvider={ElectronDataProvider.getInstance()}
-    />
-  );
-};
-
 function Toast({ message, type }: { message: string; type: "info" | "error" }) {
   const bg = type === "error" ? "#c0392b" : "#2d7bf4";
   return (
@@ -103,6 +41,7 @@ export default function App() {
   const [toast, setToast] = useState<{ msg: string; type: "info" | "error" } | null>(null);
   const [appVersion, setAppVersion] = useState<string>("");
   const [wsRunning, setWsRunning] = useState(false);
+  const [configDimensions, setConfigDimensions] = useState<{ width?: number; height?: number }>({});
 
   const fullscreenModeRef = useRef(fullscreenMode);
   const preferencesLoadedRef = useRef(preferencesLoaded);
@@ -130,12 +69,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    console.log("[App] Initializing singleton data provider");
-    const provider = ElectronDataProvider.getInstance({
-      enabled: true,
-      deviceId: 'electron-virtual-device'
-    });
-    provider.connect();
+    // Initialize singleton once
+    ElectronDataProvider.getInstance({ enabled: true }).connect();
   }, []);
 
   const isVisualizationWindow = new URLSearchParams(window.location.search).get("mode") === "visualization";
@@ -143,10 +78,26 @@ export default function App() {
   if (isVisualizationWindow) {
     return (
       <BrowserRouter>
-        <ElectronVisualizationWrapper />
+        <VirtualScreenViewerComponent
+          deviceId="electron-virtual-device"
+          deviceData={deviceData}
+          isStandalone={true}
+          showControls={false}
+          dataProvider={ElectronDataProvider.getInstance()}
+        />
       </BrowserRouter>
     );
   }
+
+  // Helper function to extract dimensions from config
+  const extractConfigDimensions = (data: any) => {
+    const canvas = data.frameConfig?.frameConfig?.canvas;
+    
+    return {
+      width: canvas?.width,
+      height: canvas?.height
+    };
+  };
 
   useEffect(() => {
     if (!window.ipcRenderer) return;
@@ -160,13 +111,21 @@ export default function App() {
 
     const handleRiveConfig = (_e: any, data: any) => {
       if (data.type === 'rive_config') {
+        // Extract and store config dimensions
+        const dimensions = extractConfigDimensions(data);
+        setConfigDimensions(dimensions);
+        
         const currentFullscreenMode = fullscreenModeRef.current;
         const currentPreferencesLoaded = preferencesLoadedRef.current;
         const currentVisualizationOpen = visualizationOpenRef.current;
         
         if (!currentVisualizationOpen && currentPreferencesLoaded) {
+          const dimensionText = dimensions.width && dimensions.height 
+            ? ` (${dimensions.width}x${dimensions.height})`
+            : ' (using fallback dimensions)';
+            
           setToast({ 
-            msg: `Configuration received, opening ViewPort in ${currentFullscreenMode ? 'Fullscreen' : 'Windowed'} mode...`, 
+            msg: `Configuration received${dimensionText}, opening ViewPort in ${currentFullscreenMode ? 'Fullscreen' : 'Windowed'} mode...`, 
             type: "info" 
           });
           setVisualizationOpen(true);
@@ -218,6 +177,14 @@ export default function App() {
     window.ipcRenderer.send("quit-app");
   };
 
+  // Display current config info if available
+  const getConfigInfo = () => {
+    if (configDimensions.width && configDimensions.height) {
+      return ` (Config: ${configDimensions.width}x${configDimensions.height})`;
+    }
+    return ' (No config received)';
+  };
+
   return (
     <div
       style={{
@@ -259,7 +226,7 @@ export default function App() {
         <hr style={{ margin: "12px 0", border: "none", borderTop: "1px solid #333" }} />
 
         <section>
-          <h3 style={{ margin: "0 0 12px" }}>JunctionRelay Virtual Device</h3>
+          <h3 style={{ margin: "0 0 12px" }}>JunctionRelay Virtual Device{getConfigInfo()}</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
               <button style={{ padding: "10px 14px", cursor: "pointer" }} onClick={startWebSocketServer}>

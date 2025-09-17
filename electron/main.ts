@@ -9,9 +9,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // WebSocket server instance
 let jrWs: Helper_WebSocket | null = null;
 
-// CRITICAL: Track last received data to preserve singleton cache
-let lastRiveConfig: any = null;
-let lastSensorData: any = null;
+// Simple cache
+let cachedConfig: any = null;
+let cachedSensor: any = null;
 
 // Paths
 process.env.APP_ROOT = path.join(__dirname, '..')
@@ -26,7 +26,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let win: BrowserWindow | null
 let kioskWindow: BrowserWindow | null = null
 
-// Preferences handling (unchanged)
+// Preferences handling
 const getPreferencesPath = () => {
   const userDataPath = app.getPath('userData');
   return path.join(userDataPath, 'jr-preferences.json');
@@ -42,14 +42,10 @@ const loadPreferences = () => {
     if (fs.existsSync(prefsPath)) {
       const data = fs.readFileSync(prefsPath, 'utf8');
       const parsed = JSON.parse(data);
-      console.log('[main] Loaded preferences from disk:', parsed);
       return { ...defaultPreferences, ...parsed };
-    } else {
-      console.log('[main] No preferences file found, using defaults');
-      return defaultPreferences;
     }
+    return defaultPreferences;
   } catch (error) {
-    console.warn('[main] Error loading preferences, using defaults:', error);
     return defaultPreferences;
   }
 };
@@ -64,60 +60,45 @@ const savePreferences = (preferences: any) => {
     }
     
     fs.writeFileSync(prefsPath, JSON.stringify(preferences, null, 2), 'utf8');
-    console.log('[main] Saved preferences to disk:', preferences);
     return true;
   } catch (error) {
-    console.error('[main] Error saving preferences:', error);
     return false;
   }
 };
 
 let userPreferences = loadPreferences();
 
-// FIXED: Data forwarding that preserves cache
-function forwardIncomingData(doc: Record<string, any>) {
+// Broadcast to all windows and cache
+function handleWebSocketData(doc: Record<string, any>) {
   if (doc.type === "rive_config") {
-    console.log('[main] Caching config data for singleton preservation');
-    lastRiveConfig = doc; // Cache the config data
-    
-    // Forward to windows
+    cachedConfig = doc;
     win?.webContents.send("rive-config", doc);
     kioskWindow?.webContents.send("rive-config", doc);
-    return;
-  }
-
-  if (doc.type === "rive_sensor") {
-    // console.log('[main] Caching sensor data for singleton preservation');
-    lastSensorData = doc; // Cache the sensor data
-    
-    // Forward to windows
+  } else if (doc.type === "rive_sensor") {
+    cachedSensor = doc;
     win?.webContents.send("rive-sensor-data", doc);
     kioskWindow?.webContents.send("rive-sensor-data", doc);
-    return;
   }
-
-  // Ignore heartbeats and other noise silently
 }
 
-// ADDED: Function to replay cached data to new windows
-function replayCachedDataToWindow(window: BrowserWindow) {
-  if (!window || window.isDestroyed()) return;
+// Send cached data to window
+function sendCached(window: BrowserWindow) {
+  if (window?.isDestroyed()) return;
+  if (cachedConfig) window.webContents.send("rive-config", cachedConfig);
+  if (cachedSensor) window.webContents.send("rive-sensor-data", cachedSensor);
+}
+
+// Helper function to extract dimensions from config
+function getConfigDimensions() {
+  if (!cachedConfig) return { width: null, height: null };
   
-  console.log('[main] Replaying cached data to new window...');
+  // Get dimensions from canvas in the config
+  const canvas = cachedConfig.frameConfig?.frameConfig?.canvas;
   
-  if (lastRiveConfig) {
-    console.log('[main] Sending cached config to new window');
-    window.webContents.send("rive-config", lastRiveConfig);
-  }
-  
-  if (lastSensorData) {
-    console.log('[main] Sending cached sensor data to new window');
-    window.webContents.send("rive-sensor-data", lastSensorData);
-  }
-  
-  if (!lastRiveConfig && !lastSensorData) {
-    console.log('[main] No cached data to replay');
-  }
+  return {
+    width: canvas?.width || null,
+    height: canvas?.height || null
+  };
 }
 
 function createWindow() {
@@ -129,11 +110,8 @@ function createWindow() {
     },
   })
 
-  // ADDED: Replay cached data when main window loads
-  win.webContents.once('did-finish-load', () => {
-    console.log('[main] Main window loaded, replaying cached data...');
-    replayCachedDataToWindow(win!);
-  });
+  // Send cached data when window loads
+  win.webContents.once('did-finish-load', () => sendCached(win!));
 
   if (app.isPackaged) {
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
@@ -147,7 +125,6 @@ function createWindow() {
 
 async function startWebSocketServer() {
   if (jrWs?.isRunning()) {
-    console.log("[main] WebSocket already running");
     win?.webContents.send("ws-status", { ok: true, message: "WebSocket already running." });
     return;
   }
@@ -155,16 +132,14 @@ async function startWebSocketServer() {
   try {
     jrWs = new Helper_WebSocket({
       port: 81,
-      onDocument: forwardIncomingData,
-      onProtocol: () => {}, // Ignore protocol messages for now
-      onSystem: () => {},   // Ignore system messages for now
+      onDocument: handleWebSocketData,
+      onProtocol: () => {},
+      onSystem: () => {},
     });
 
     await jrWs.start();
-    console.log("[main] WebSocket server started on :81");
     win?.webContents.send("ws-status", { ok: true, message: "WebSocket server started on :81" });
   } catch (error) {
-    console.error("[main] WebSocket failed:", error);
     win?.webContents.send("ws-status", { ok: false, message: `Failed to start WebSocket: ${String(error)}` });
   }
 }
@@ -173,44 +148,31 @@ function stopWebSocketServer() {
   if (jrWs) {
     jrWs.stop();
     jrWs = null;
-    console.log("[main] WebSocket stopped");
     win?.webContents.send("ws-status", { ok: true, message: "WebSocket server stopped." });
   } else {
     win?.webContents.send("ws-status", { ok: true, message: "WebSocket not running." });
   }
 }
 
-// Basic IPC handlers (unchanged)
-ipcMain.on('open-external', (_, url) => {
-  shell.openExternal(url)
-})
-
-ipcMain.handle('get-app-version', () => {
-  return app.getVersion()
-})
-
-ipcMain.handle('get-fullscreen-preference', () => {
-  console.log(`[main] Retrieved fullscreen preference: ${userPreferences.fullscreenMode}`);
-  return userPreferences.fullscreenMode;
-})
-
+// IPC handlers
+ipcMain.on('open-external', (_, url) => shell.openExternal(url))
+ipcMain.handle('get-app-version', () => app.getVersion())
+ipcMain.handle('get-fullscreen-preference', () => userPreferences.fullscreenMode)
 ipcMain.on('save-fullscreen-preference', (_, preference: boolean) => {
   userPreferences.fullscreenMode = preference;
-  const saved = savePreferences(userPreferences);
-  console.log(`[main] ${saved ? 'Saved' : 'Failed to save'} fullscreen preference: ${preference}`);
+  savePreferences(userPreferences);
 })
 
 ipcMain.on("start-ws", startWebSocketServer);
 ipcMain.on("stop-ws", stopWebSocketServer);
 
-// FIXED: Visualization window creation with cached data replay
 ipcMain.on('open-visualization', (event, options = {}) => {
   if (kioskWindow && !kioskWindow.isDestroyed()) {
     kioskWindow.focus();
     return;
   }
   
-  const useFullscreen = options.fullscreen !== false; // Default to true unless explicitly false
+  const useFullscreen = options.fullscreen !== false;
   
   const windowOptions: any = {
     webPreferences: {
@@ -227,20 +189,33 @@ ipcMain.on('open-visualization', (event, options = {}) => {
       alwaysOnTop: true,
     });
   } else {
+    // Get dimensions from config first, fallback to defaults
+    const { width: configWidth, height: configHeight } = getConfigDimensions();
+    
+    const windowWidth = configWidth || 1000;   // Fallback to 1000
+    const windowHeight = configHeight || 700;  // Fallback to 700
+    
     Object.assign(windowOptions, {
-      width: 1000,
-      height: 700,
+      width: windowWidth,
+      height: windowHeight,
+      useContentSize: true, // Content area should match config dimensions
       frame: true,
       alwaysOnTop: false,
       resizable: true,
       title: 'JunctionRelay Visualization',
+      minWidth: 400,
+      minHeight: 300,
     });
+    
+    console.log(`Opening visualization window with dimensions: ${windowWidth}x${windowHeight} (content size)${configWidth ? ' from config' : ' using fallback'}`);
   }
   
   kioskWindow = new BrowserWindow(windowOptions);
-
-  // Always open dev tools on visualization window for debugging
-  kioskWindow.webContents.openDevTools();
+  
+  // Only open dev tools in development mode
+  if (!app.isPackaged && VITE_DEV_SERVER_URL) {
+    kioskWindow.webContents.openDevTools();
+  }
 
   kioskWindow.on('closed', () => {
     kioskWindow = null;
@@ -253,13 +228,9 @@ ipcMain.on('open-visualization', (event, options = {}) => {
     }
   });
 
-  // CRITICAL: Replay cached data when visualization window loads
+  // Send cached data when visualization window loads
   kioskWindow.webContents.once('did-finish-load', () => {
-    console.log('[main] Visualization window loaded, replaying cached data...');
-    setTimeout(() => {
-      // Small delay to ensure React components are mounted
-      replayCachedDataToWindow(kioskWindow!);
-    }, 100);
+    setTimeout(() => sendCached(kioskWindow!), 100);
   });
 
   if (app.isPackaged) {
@@ -283,7 +254,7 @@ ipcMain.on('quit-app', () => {
   app.quit();
 });
 
-// App lifecycle (unchanged)
+// App lifecycle
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     stopWebSocketServer();
