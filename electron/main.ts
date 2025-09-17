@@ -9,6 +9,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // WebSocket server instance
 let jrWs: Helper_WebSocket | null = null;
 
+// CRITICAL: Track last received data to preserve singleton cache
+let lastRiveConfig: any = null;
+let lastSensorData: any = null;
+
 // Paths
 process.env.APP_ROOT = path.join(__dirname, '..')
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
@@ -22,7 +26,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let win: BrowserWindow | null
 let kioskWindow: BrowserWindow | null = null
 
-// Preferences handling
+// Preferences handling (unchanged)
 const getPreferencesPath = () => {
   const userDataPath = app.getPath('userData');
   return path.join(userDataPath, 'jr-preferences.json');
@@ -70,9 +74,12 @@ const savePreferences = (preferences: any) => {
 
 let userPreferences = loadPreferences();
 
-// Simple data forwarding - no logging
+// FIXED: Data forwarding that preserves cache
 function forwardIncomingData(doc: Record<string, any>) {
   if (doc.type === "rive_config") {
+    console.log('[main] Caching config data for singleton preservation');
+    lastRiveConfig = doc; // Cache the config data
+    
     // Forward to windows
     win?.webContents.send("rive-config", doc);
     kioskWindow?.webContents.send("rive-config", doc);
@@ -80,6 +87,9 @@ function forwardIncomingData(doc: Record<string, any>) {
   }
 
   if (doc.type === "rive_sensor") {
+    // console.log('[main] Caching sensor data for singleton preservation');
+    lastSensorData = doc; // Cache the sensor data
+    
     // Forward to windows
     win?.webContents.send("rive-sensor-data", doc);
     kioskWindow?.webContents.send("rive-sensor-data", doc);
@@ -87,6 +97,27 @@ function forwardIncomingData(doc: Record<string, any>) {
   }
 
   // Ignore heartbeats and other noise silently
+}
+
+// ADDED: Function to replay cached data to new windows
+function replayCachedDataToWindow(window: BrowserWindow) {
+  if (!window || window.isDestroyed()) return;
+  
+  console.log('[main] Replaying cached data to new window...');
+  
+  if (lastRiveConfig) {
+    console.log('[main] Sending cached config to new window');
+    window.webContents.send("rive-config", lastRiveConfig);
+  }
+  
+  if (lastSensorData) {
+    console.log('[main] Sending cached sensor data to new window');
+    window.webContents.send("rive-sensor-data", lastSensorData);
+  }
+  
+  if (!lastRiveConfig && !lastSensorData) {
+    console.log('[main] No cached data to replay');
+  }
 }
 
 function createWindow() {
@@ -97,6 +128,12 @@ function createWindow() {
       nodeIntegration: false,
     },
   })
+
+  // ADDED: Replay cached data when main window loads
+  win.webContents.once('did-finish-load', () => {
+    console.log('[main] Main window loaded, replaying cached data...');
+    replayCachedDataToWindow(win!);
+  });
 
   if (app.isPackaged) {
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
@@ -143,7 +180,7 @@ function stopWebSocketServer() {
   }
 }
 
-// Basic IPC handlers
+// Basic IPC handlers (unchanged)
 ipcMain.on('open-external', (_, url) => {
   shell.openExternal(url)
 })
@@ -166,6 +203,7 @@ ipcMain.on('save-fullscreen-preference', (_, preference: boolean) => {
 ipcMain.on("start-ws", startWebSocketServer);
 ipcMain.on("stop-ws", stopWebSocketServer);
 
+// FIXED: Visualization window creation with cached data replay
 ipcMain.on('open-visualization', (event, options = {}) => {
   if (kioskWindow && !kioskWindow.isDestroyed()) {
     kioskWindow.focus();
@@ -215,6 +253,15 @@ ipcMain.on('open-visualization', (event, options = {}) => {
     }
   });
 
+  // CRITICAL: Replay cached data when visualization window loads
+  kioskWindow.webContents.once('did-finish-load', () => {
+    console.log('[main] Visualization window loaded, replaying cached data...');
+    setTimeout(() => {
+      // Small delay to ensure React components are mounted
+      replayCachedDataToWindow(kioskWindow!);
+    }, 100);
+  });
+
   if (app.isPackaged) {
     kioskWindow.loadFile(path.join(RENDERER_DIST, 'index.html'), {
       query: { mode: 'visualization' },
@@ -236,7 +283,7 @@ ipcMain.on('quit-app', () => {
   app.quit();
 });
 
-// App lifecycle
+// App lifecycle (unchanged)
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     stopWebSocketServer();

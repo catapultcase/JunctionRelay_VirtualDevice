@@ -380,6 +380,8 @@ __publicField(_Helper_WebSocket, "cachedMac", null);
 let Helper_WebSocket = _Helper_WebSocket;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let jrWs = null;
+let lastRiveConfig = null;
+let lastSensorData = null;
 process.env.APP_ROOT = path.join(__dirname, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
@@ -429,14 +431,32 @@ const savePreferences = (preferences) => {
 let userPreferences = loadPreferences();
 function forwardIncomingData(doc) {
   if (doc.type === "rive_config") {
+    console.log("[main] Caching config data for singleton preservation");
+    lastRiveConfig = doc;
     win == null ? void 0 : win.webContents.send("rive-config", doc);
     kioskWindow == null ? void 0 : kioskWindow.webContents.send("rive-config", doc);
     return;
   }
   if (doc.type === "rive_sensor") {
+    lastSensorData = doc;
     win == null ? void 0 : win.webContents.send("rive-sensor-data", doc);
     kioskWindow == null ? void 0 : kioskWindow.webContents.send("rive-sensor-data", doc);
     return;
+  }
+}
+function replayCachedDataToWindow(window) {
+  if (!window || window.isDestroyed()) return;
+  console.log("[main] Replaying cached data to new window...");
+  if (lastRiveConfig) {
+    console.log("[main] Sending cached config to new window");
+    window.webContents.send("rive-config", lastRiveConfig);
+  }
+  if (lastSensorData) {
+    console.log("[main] Sending cached sensor data to new window");
+    window.webContents.send("rive-sensor-data", lastSensorData);
+  }
+  if (!lastRiveConfig && !lastSensorData) {
+    console.log("[main] No cached data to replay");
   }
 }
 function createWindow() {
@@ -446,6 +466,10 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false
     }
+  });
+  win.webContents.once("did-finish-load", () => {
+    console.log("[main] Main window loaded, replaying cached data...");
+    replayCachedDataToWindow(win);
   });
   if (app.isPackaged) {
     win.loadFile(path.join(RENDERER_DIST, "index.html"));
@@ -547,6 +571,12 @@ ipcMain.on("open-visualization", (event, options = {}) => {
     if (input.key === "Escape" && input.type === "keyDown") {
       kioskWindow == null ? void 0 : kioskWindow.close();
     }
+  });
+  kioskWindow.webContents.once("did-finish-load", () => {
+    console.log("[main] Visualization window loaded, replaying cached data...");
+    setTimeout(() => {
+      replayCachedDataToWindow(kioskWindow);
+    }, 100);
   });
   if (app.isPackaged) {
     kioskWindow.loadFile(path.join(RENDERER_DIST, "index.html"), {

@@ -291,6 +291,26 @@ export class ElectronDataProvider implements VirtualDisplayDataProvider {
         return this.streamRecord;
     }
 
+    // Public method to reprocess cached config when visualization window opens
+    reprocessCachedConfig(): void {
+        if (this.streamRecord?.configPayload) {
+            console.log('[ElectronDataProvider] Reprocessing cached config data');
+            this.processConfigData(this.streamRecord.configPayload);
+        } else {
+            console.log('[ElectronDataProvider] No cached config data to reprocess');
+        }
+    }
+
+    // Public method to reprocess cached sensor data
+    reprocessCachedSensorData(): void {
+        if (this.streamRecord?.sensorPayload) {
+            console.log('[ElectronDataProvider] Reprocessing cached sensor data');
+            this.processSensorData(this.streamRecord.sensorPayload);
+        } else {
+            console.log('[ElectronDataProvider] No cached sensor data to reprocess');
+        }
+    }
+
     // Data transformation methods
     private processConfigData(rawConfig: any): void {
         try {

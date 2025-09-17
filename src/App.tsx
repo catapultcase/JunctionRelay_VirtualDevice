@@ -16,9 +16,46 @@ const ElectronVisualizationWrapper = () => {
       deviceId: 'electron-virtual-device'
     });
     provider.connect();
+
+    // Check if provider already has cached data and reprocess it
+    const existingStreamData = provider.getDeviceStreamResponse();
+    console.log('[ElectronVisualizationWrapper] Checking for cached data:', existingStreamData);
+    
+    if (existingStreamData) {
+      console.log('[ElectronVisualizationWrapper] Found existing stream data');
+      
+      // Reprocess config data if available
+      if (existingStreamData.configPayload) {
+        console.log('[ElectronVisualizationWrapper] Found cached config, reprocessing:', existingStreamData.configPayload.type);
+        provider.reprocessCachedConfig();
+      } else {
+        console.log('[ElectronVisualizationWrapper] No cached config found');
+      }
+      
+      // Reprocess sensor data if available
+      if (existingStreamData.sensorPayload) {
+        console.log('[ElectronVisualizationWrapper] Found cached sensor data, reprocessing');
+        provider.reprocessCachedSensorData();
+      } else {
+        console.log('[ElectronVisualizationWrapper] No cached sensor data found');
+      }
+    } else {
+      console.log('[ElectronVisualizationWrapper] No cached stream data found');
+    }
+
+    // Listen for new updates
+    const unsubscribeConfig = provider.onConfigurationReceived((config) => {
+      console.log('[ElectronVisualizationWrapper] New config received:', config.type);
+    });
+
+    const unsubscribeSensor = provider.onSensorDataReceived((data) => {
+      console.log('[ElectronVisualizationWrapper] New sensor data received:', data.type);
+    });
     
     return () => {
       console.log('[ElectronVisualizationWrapper] Unmounting - singleton persists');
+      unsubscribeConfig();
+      unsubscribeSensor();
     };
   }, []);
 
