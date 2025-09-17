@@ -1,17 +1,19 @@
-import { g as ne } from "./_commonjsHelpers-DaMA6jEr.js";
 import Lt from "events";
 import or from "https";
 import Bt from "http";
 import ar from "net";
 import lr from "tls";
 import ze from "crypto";
-import oe from "stream";
+import ne from "stream";
 import fr from "url";
 import cr from "zlib";
 import hr from "fs";
 import ur from "path";
 import dr from "os";
 import _r from "buffer";
+function oe(r) {
+  return r && r.__esModule && Object.prototype.hasOwnProperty.call(r, "default") ? r.default : r;
+}
 var Se = { exports: {} };
 const Pt = ["nodebuffer", "arraybuffer", "fragments"], $t = typeof Blob < "u";
 $t && Pt.push("blob");
@@ -752,7 +754,7 @@ else if (!process.env.WS_NO_UTF_8_VALIDATE)
   } catch {
   }
 var ae = Ee.exports;
-const { Writable: Ir } = oe, lt = ke, {
+const { Writable: Ir } = ne, lt = ke, {
   BINARY_TYPES: Mr,
   EMPTY_BUFFER: ft,
   kStatusCode: Ar,
@@ -1220,7 +1222,7 @@ let Vr = class extends Ir {
   }
 };
 var Ft = Vr;
-const di = /* @__PURE__ */ ne(Ft), { Duplex: _i } = oe, { randomFillSync: qr } = ze, _t = ke, { EMPTY_BUFFER: zr, kWebSocket: Hr, NOOP: Yr } = M, { isBlob: z, isValidStatusCode: Kr } = ae, { mask: pt, toBuffer: A } = we, O = Symbol("kByteLength"), Xr = Buffer.alloc(4), ge = 8 * 1024;
+const ui = /* @__PURE__ */ oe(Ft), { Duplex: di } = ne, { randomFillSync: qr } = ze, _t = ke, { EMPTY_BUFFER: zr, kWebSocket: Hr, NOOP: Yr } = M, { isBlob: z, isValidStatusCode: Kr } = ae, { mask: pt, toBuffer: A } = we, O = Symbol("kByteLength"), Xr = Buffer.alloc(4), ge = 8 * 1024;
 let F, H = ge;
 const C = 0, Zr = 1, Qr = 2;
 let Jr = class j {
@@ -1504,7 +1506,7 @@ function qe(r, e, t) {
 function es(r, e, t) {
   qe(r, e, t), r.onerror(e);
 }
-const pi = /* @__PURE__ */ ne(Wt), { kForOnEventAttribute: te, kListener: Ie } = M, mt = Symbol("kCode"), yt = Symbol("kData"), gt = Symbol("kError"), vt = Symbol("kMessage"), St = Symbol("kReason"), K = Symbol("kTarget"), xt = Symbol("kType"), Et = Symbol("kWasClean");
+const _i = /* @__PURE__ */ oe(Wt), { kForOnEventAttribute: te, kListener: Ie } = M, mt = Symbol("kCode"), yt = Symbol("kData"), gt = Symbol("kError"), vt = Symbol("kMessage"), St = Symbol("kReason"), K = Symbol("kTarget"), xt = Symbol("kType"), Et = Symbol("kWasClean");
 class Z {
   /**
    * Create a new `Event`.
@@ -1768,7 +1770,7 @@ function is(r) {
   }).join(", ");
 }
 var Gt = { format: is, parse: ss };
-const ns = Lt, os = or, as = Bt, Vt = ar, ls = lr, { randomBytes: fs, createHash: cs } = ze, { Duplex: mi, Readable: yi } = oe, { URL: Me } = fr, I = ke, hs = Ft, us = Wt, { isBlob: ds } = ae, {
+const ns = Lt, os = or, as = Bt, Vt = ar, ls = lr, { randomBytes: fs, createHash: cs } = ze, { Duplex: pi, Readable: mi } = ne, { URL: Me } = fr, I = ke, hs = Ft, us = Wt, { isBlob: ds } = ae, {
   BINARY_TYPES: bt,
   EMPTY_BUFFER: ye,
   GUID: _s,
@@ -2350,7 +2352,7 @@ function Jt() {
   const r = this[E];
   this.removeListener("error", Jt), this.on("error", qt), r && (r._readyState = S.CLOSING, this.destroy());
 }
-const gi = /* @__PURE__ */ ne(Ht), { Duplex: $s } = oe;
+const yi = /* @__PURE__ */ oe(Ht), { Duplex: $s } = ne;
 function kt(r) {
   r.emit("close");
 }
@@ -2410,7 +2412,7 @@ function Us(r, e) {
   }, s.on("end", Rs), s.on("error", er), s;
 }
 var Ds = Us;
-const vi = /* @__PURE__ */ ne(Ds), { tokenChars: Is } = ae;
+const gi = /* @__PURE__ */ oe(Ds), { tokenChars: Is } = ae;
 function Ms(r) {
   const e = /* @__PURE__ */ new Set();
   let t = -1, s = -1, i = 0;
@@ -2439,7 +2441,7 @@ function Ms(r) {
   return e.add(n), e;
 }
 var As = { parse: Ms };
-const Fs = Lt, be = Bt, { Duplex: Si } = oe, { createHash: Ws } = ze, Tt = Gt, W = ke, js = As, Gs = Ht, { GUID: Vs, kWebSocket: qs } = M, zs = /^[+/0-9A-Za-z]{22}==$/, Ot = 0, Ct = 1, tr = 2;
+const Fs = Lt, be = Bt, { Duplex: vi } = ne, { createHash: Ws } = ze, Tt = Gt, W = ke, js = As, Gs = Ht, { GUID: Vs, kWebSocket: qs } = M, zs = /^[+/0-9A-Za-z]{22}==$/, Ot = 0, Ct = 1, tr = 2;
 class Hs extends Fs {
   /**
    * Create a `WebSocketServer` instance.
@@ -2736,12 +2738,12 @@ function G(r, e, t, s, i, n) {
   } else
     ie(t, s, i, n);
 }
-const xi = /* @__PURE__ */ ne(Ys);
+const Si = /* @__PURE__ */ oe(Ys);
 export {
-  di as Receiver,
-  pi as Sender,
-  gi as WebSocket,
-  xi as WebSocketServer,
-  vi as createWebSocketStream,
-  gi as default
+  ui as Receiver,
+  _i as Sender,
+  yi as WebSocket,
+  Si as WebSocketServer,
+  gi as createWebSocketStream,
+  yi as default
 };

@@ -1,4 +1,3 @@
-import { g as getDefaultExportFromCjs } from "./_commonjsHelpers-DWwsNxpa.js";
 import require$$0$4 from "events";
 import require$$1$2 from "https";
 import require$$2$1 from "http";
@@ -12,6 +11,9 @@ import require$$0 from "fs";
 import require$$1 from "path";
 import require$$2 from "os";
 import require$$0$2 from "buffer";
+function getDefaultExportFromCjs(x) {
+  return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
+}
 var bufferUtil$1 = { exports: {} };
 const BINARY_TYPES$2 = ["nodebuffer", "arraybuffer", "fragments"];
 const hasBlob$1 = typeof Blob !== "undefined";
