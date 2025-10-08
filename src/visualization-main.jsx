@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { VirtualScreenViewerComponent } from './shared/pages/VirtualScreenViewer';
 import { ElectronDataProvider } from '../ElectronDataProvider';
+import { FpsCounter } from './components/FpsCounter';
 
 const deviceData = {
   name: "JunctionRelay Virtual Device",
@@ -27,10 +28,28 @@ function VisualizationApp() {
       document.body.style.cursor = visible ? 'default' : 'none';
     };
 
+    // Handle Escape key to close window
+    const handleKeyDown = (event) => {
+      console.log('[VisualizationApp] Key pressed:', event.key, event.code);
+      if (event.key === 'Escape' || event.code === 'Escape') {
+        console.log('[VisualizationApp] Escape pressed, closing window');
+        event.preventDefault();
+        event.stopPropagation();
+        ipcRenderer.send('close-visualization-window');
+      }
+    };
+
+    // Add both window and document listeners for better coverage
+    console.log('[VisualizationApp] Adding keyboard listeners');
     ipcRenderer.on('set-cursor-visibility', handleCursorVisibility);
+    window.addEventListener('keydown', handleKeyDown, true); // Use capture phase
+    document.addEventListener('keydown', handleKeyDown, true);
 
     return () => {
+      console.log('[VisualizationApp] Removing keyboard listeners');
       ipcRenderer.off('set-cursor-visibility', handleCursorVisibility);
+      window.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
     };
   }, []);
 
@@ -62,6 +81,7 @@ function VisualizationApp() {
           showControls={showFps}
           dataProvider={dataProvider}
         />
+        <FpsCounter visible={showFps} />
       </div>
     </BrowserRouter>
   );
