@@ -88,6 +88,25 @@ function sendCachedData(window) {
   }
 }
 
+// Helper function to resize visualization window based on config
+function resizeVisualizationWindow(config) {
+  if (!visualizationWindow || visualizationWindow.isDestroyed()) return;
+  if (visualizationWindow.isFullScreen()) return; // Don't resize if fullscreen
+  
+  try {
+    const canvasWidth = config?.frameConfig?.canvas?.width;
+    const canvasHeight = config?.frameConfig?.canvas?.height;
+    
+    if (canvasWidth && canvasHeight) {
+      console.log(`[Main] Resizing visualization window to ${canvasWidth}x${canvasHeight}`);
+      visualizationWindow.setContentSize(canvasWidth, canvasHeight);
+      visualizationWindow.center();
+    }
+  } catch (err) {
+    console.error('[Main] Error resizing visualization window:', err);
+  }
+}
+
 // Forward WebSocket messages to renderer and cache them
 function forwardMessageToRenderer(doc) {
   const type = doc?.type;
@@ -104,6 +123,9 @@ function forwardMessageToRenderer(doc) {
       const fullscreen = prefs.fullscreenMode ?? true;
       const hideCursor = prefs.hideCursor ?? true;
       openVisualizationWindow({ fullscreen, hideCursor });
+    } else if (visualizationWindow && !visualizationWindow.isDestroyed()) {
+      // Resize existing window if not fullscreen
+      resizeVisualizationWindow(doc);
     }
   } else if (type === 'rive_sensor') {
     cachedSensor = doc;
@@ -144,9 +166,19 @@ function openVisualizationWindow(options) {
 
   const { fullscreen = true, hideCursor = true } = options || {};
 
+  // Get dimensions from cached config if available and not fullscreen
+  let windowWidth = 1280;
+  let windowHeight = 720;
+  
+  if (!fullscreen && cachedConfig?.frameConfig?.canvas) {
+    windowWidth = cachedConfig.frameConfig.canvas.width || 1280;
+    windowHeight = cachedConfig.frameConfig.canvas.height || 720;
+    console.log(`[Main] Using canvas dimensions: ${windowWidth}x${windowHeight}`);
+  }
+
   visualizationWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: windowWidth,
+    height: windowHeight,
     fullscreen: fullscreen,
     frame: !fullscreen,
     webPreferences: {
@@ -154,6 +186,11 @@ function openVisualizationWindow(options) {
       contextIsolation: false
     }
   });
+
+  // Center the window
+  if (!fullscreen) {
+    visualizationWindow.center();
+  }
 
   // Load the built React app
   const visualizationPath = path.join(__dirname, 'dist-react', 'visualization.html');
@@ -343,6 +380,15 @@ ipcMain.on('open-visualization', (_event, options) => {
 ipcMain.on('close-visualization', () => {
   if (visualizationWindow && !visualizationWindow.isDestroyed()) {
     visualizationWindow.close();
+  }
+});
+
+// Handle Escape key to close visualization window
+ipcMain.on('close-visualization-window', (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (window) {
+    console.log('[Main] Closing visualization window via Escape key');
+    window.close();
   }
 });
 
