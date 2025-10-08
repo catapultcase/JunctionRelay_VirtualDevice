@@ -223,6 +223,21 @@
           }
           this.showToast(data.message, data.ok ? 'info' : 'error');
         });
+
+        // Setup visualization window listeners
+        ipcRenderer.on('visualization-opened', () => {
+          this.viewportOpen = true;
+          const btn = document.getElementById('viewport-btn');
+          btn.textContent = 'Close ViewPort';
+          btn.className = 'danger';
+        });
+
+        ipcRenderer.on('visualization-closed', () => {
+          this.viewportOpen = false;
+          const btn = document.getElementById('viewport-btn');
+          btn.textContent = 'Open ViewPort';
+          btn.className = '';
+        });
       },
 
       updateHeader() {
@@ -280,11 +295,15 @@
       },
 
       toggleViewport() {
-        this.viewportOpen = !this.viewportOpen;
-        const btn = document.getElementById('viewport-btn');
-        btn.textContent = this.viewportOpen ? 'Close ViewPort' : 'Open ViewPort';
-        btn.className = this.viewportOpen ? 'danger' : '';
-        this.showToast(this.viewportOpen ? 'ViewPort opened' : 'ViewPort closed');
+        if (this.viewportOpen) {
+          ipcRenderer.send('close-visualization');
+        } else {
+          ipcRenderer.send('open-visualization', {
+            fullscreen: this.fullscreenMode,
+            hideCursor: document.getElementById('hide-cursor').checked,
+            showFps: document.getElementById('show-fps').checked
+          });
+        }
       },
 
       quit() {

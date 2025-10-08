@@ -14,6 +14,7 @@ class WebSocketServerManager {
     this.messagesReceived = 0;
     this.messagesSent = 0;
     this.cachedMac = null;
+    this.onMessage = null; // Callback for forwarding messages
     
     // Stream processor state per client
     this.clientProcessors = new Map();

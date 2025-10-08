@@ -15,6 +15,7 @@ if (process.platform === 'linux' && (process.arch === 'arm' || process.arch === 
 }
 
 let mainWindow = null;
+let visualizationWindow = null;
 let wsServer = null;
 
 // Preferences storage
@@ -122,6 +123,34 @@ ipcMain.on('open-external', (_event, url) => {
   // We'll add shell.openExternal later
 });
 
+// Forward WebSocket messages to renderer
+function forwardMessageToRenderer(doc) {
+  // Forward to visualization window if open
+  if (visualizationWindow && !visualizationWindow.isDestroyed()) {
+    try {
+      const type = doc?.type;
+      
+      if (type === 'rive_config') {
+        console.log('[Main] Forwarding rive_config to visualization window');
+        visualizationWindow.webContents.send('rive-config', doc);
+      } else if (type === 'rive_sensor') {
+        visualizationWindow.webContents.send('rive-sensor-data', doc);
+      }
+    } catch (err) {
+      console.error('[Main] Error forwarding message:', err);
+    }
+  }
+
+  // Also forward to main window for logging
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('rive-config', doc);
+    } catch (err) {
+      // Ignore
+    }
+  }
+}
+
 // WebSocket handlers
 ipcMain.on('start-ws', (event) => {
   if (wsServer && wsServer.isRunning()) {
@@ -131,6 +160,10 @@ ipcMain.on('start-ws', (event) => {
 
   try {
     wsServer = new WebSocketServerManager(8081);
+    
+    // Setup message forwarding
+    wsServer.onMessage = forwardMessageToRenderer;
+    
     const started = wsServer.start();
     
     if (started) {
@@ -180,6 +213,66 @@ ipcMain.handle('get-local-ips', () => {
     }
   }
   return ips.length ? ips : ['0.0.0.0'];
+});
+
+// Visualization window handlers
+ipcMain.on('open-visualization', (_event, options) => {
+  if (visualizationWindow && !visualizationWindow.isDestroyed()) {
+    visualizationWindow.focus();
+    return;
+  }
+
+  const { fullscreen = true, hideCursor = true } = options || {};
+
+  visualizationWindow = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    fullscreen: fullscreen,
+    frame: !fullscreen,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  // Load the built React app
+  const visualizationPath = path.join(__dirname, 'dist-react', 'visualization.html');
+  
+  if (fs.existsSync(visualizationPath)) {
+    visualizationWindow.loadFile(visualizationPath);
+  } else {
+    // Fallback for development
+    visualizationWindow.loadURL('http://localhost:5173/visualization.html');
+  }
+
+  visualizationWindow.webContents.on('did-finish-load', () => {
+    console.log('[Main] Visualization window loaded');
+    
+    // Set cursor visibility
+    if (fullscreen && hideCursor) {
+      visualizationWindow.webContents.send('set-cursor-visibility', false);
+    }
+
+    // Notify main window
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('visualization-opened');
+    }
+  });
+
+  visualizationWindow.on('closed', () => {
+    visualizationWindow = null;
+    
+    // Notify main window
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('visualization-closed');
+    }
+  });
+});
+
+ipcMain.on('close-visualization', () => {
+  if (visualizationWindow && !visualizationWindow.isDestroyed()) {
+    visualizationWindow.close();
+  }
 });
 
 app.whenReady().then(() => {
