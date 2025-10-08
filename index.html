@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>JunctionRelay Virtual Device</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      background: #111;
+      color: #eaeaea;
+      font-family: system-ui, Arial, sans-serif;
+      padding: 24px;
+    }
+    #root {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 32px;
+    }
+    h3 {
+      margin: 0 0 12px;
+      font-size: 20px;
+    }
+    p {
+      color: #9aa0a6;
+      margin: 6px 0 0;
+      font-size: 14px;
+    }
+    button {
+      padding: 10px 14px;
+      cursor: pointer;
+      background: #333;
+      color: white;
+      border: 1px solid #555;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    button:hover {
+      background: #444;
+    }
+    button.active {
+      background: #007acc;
+      border-color: #007acc;
+    }
+    button.danger {
+      background: #dc3545;
+      border-color: #dc3545;
+    }
+    hr {
+      margin: 12px 0;
+      border: none;
+      border-top: 1px solid #333;
+    }
+    .button-group {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #quit-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 8px 12px;
+      font-size: 12px;
+      z-index: 1000;
+    }
+    #version {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      font-size: 12px;
+      color: #9aa0a6;
+      z-index: 1000;
+    }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 560px;
+      background: #2d7bf4;
+      color: white;
+      padding: 10px 14px;
+      border-radius: 6px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+      z-index: 1000;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .toast.error {
+      background: #c0392b;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <header>
+      <h1>JunctionRelay</h1>
+      <p>Virtual device with WebSocket server and Rive visualization.</p>
+    </header>
+
+    <main style="flex: 1; overflow: hidden;">
+      <section>
+        <div class="button-group">
+          <button onclick="app.openLocalServer()">Local Server</button>
+          <button onclick="app.openCloudDashboard()">Cloud Dashboard</button>
+        </div>
+      </section>
+
+      <hr>
+
+      <section>
+        <h3>JunctionRelay Virtual Device</h3>
+        <div class="button-group">
+          <button id="ws-btn" onclick="app.toggleWebSocket()">Start WebSocket Server</button>
+          <button id="mode-btn" class="active" onclick="app.toggleMode()">Fullscreen</button>
+          <button id="viewport-btn" onclick="app.toggleViewport()">Open ViewPort</button>
+        </div>
+
+        <div class="checkbox-group">
+          <label>
+            <input type="checkbox" id="hide-cursor" checked>
+            <span>Hide cursor in fullscreen mode</span>
+          </label>
+          <label>
+            <input type="checkbox" id="auto-start">
+            <span>Auto-start WebSocket server on launch</span>
+          </label>
+          <label>
+            <input type="checkbox" id="show-fps">
+            <span>Show FPS overlay in visualization</span>
+          </label>
+        </div>
+      </section>
+    </main>
+
+    <button id="quit-btn" class="danger" onclick="app.quit()">Quit</button>
+    <div id="version"></div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    const app = {
+      wsRunning: false,
+      fullscreenMode: true,
+      viewportOpen: false,
+      localIps: [],
+
+      async init() {
+        // Load preferences
+        try {
+          const [version, fullscreen, hideCursor, autoStart, showFps, ips] = await Promise.all([
+            ipcRenderer.invoke('get-app-version'),
+            ipcRenderer.invoke('get-fullscreen-preference'),
+            ipcRenderer.invoke('get-hide-cursor-preference'),
+            ipcRenderer.invoke('get-auto-start-ws-preference'),
+            ipcRenderer.invoke('get-show-fps-preference'),
+            ipcRenderer.invoke('get-local-ips')
+          ]);
+
+          // Set version
+          if (version) {
+            document.getElementById('version').textContent = `v${version}`;
+          }
+
+          // Set preferences
+          this.fullscreenMode = fullscreen;
+          this.localIps = ips || [];
+          document.getElementById('hide-cursor').checked = hideCursor;
+          document.getElementById('auto-start').checked = autoStart;
+          document.getElementById('show-fps').checked = showFps;
+
+          // Update mode button
+          const modeBtn = document.getElementById('mode-btn');
+          modeBtn.textContent = this.fullscreenMode ? 'Fullscreen' : 'Windowed';
+          modeBtn.className = this.fullscreenMode ? 'active' : '';
+
+          // Update header with IPs
+          this.updateHeader();
+
+          console.log('✅ Preferences loaded');
+        } catch (err) {
+          console.error('Failed to load preferences:', err);
+        }
+
+        // Setup WebSocket status listener
+        ipcRenderer.on('ws-status', (_event, data) => {
+          if (data.ok) {
+            this.wsRunning = data.message.includes('started') || data.message.includes('already running');
+            const btn = document.getElementById('ws-btn');
+            btn.textContent = this.wsRunning ? 'Stop WebSocket Server' : 'Start WebSocket Server';
+            
+            if (data.ips) {
+              this.localIps = data.ips;
+              this.updateHeader();
+            }
+          }
+          this.showToast(data.message, data.ok ? 'info' : 'error');
+        });
+      },
+
+      updateHeader() {
+        const header = document.querySelector('header p:last-child');
+        if (header) header.remove();
+        
+        if (this.localIps.length > 0) {
+          const ipText = document.createElement('p');
+          ipText.style.color = '#6c9bcf';
+          ipText.style.margin = '6px 0 0';
+          ipText.style.fontSize = '14px';
+          ipText.textContent = `WebSocket Server: ${this.localIps.map(ip => `${ip}:8081`).join(', ')}`;
+          document.querySelector('header').appendChild(ipText);
+        }
+      },
+
+      showToast(msg, type = 'info') {
+        const existing = document.querySelector('.toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+
+        setTimeout(() => toast.remove(), 2800);
+      },
+
+      openLocalServer() {
+        const url = prompt('Enter JunctionRelay Local Server URL:', 'http://10.168.1.90:7180/');
+        if (url) {
+          ipcRenderer.send('open-external', url);
+          this.showToast('Opening URL...');
+        }
+      },
+
+      openCloudDashboard() {
+        ipcRenderer.send('open-external', 'https://dashboard.junctionrelay.com');
+        this.showToast('Opening JunctionRelay Cloud...');
+      },
+
+      toggleWebSocket() {
+        ipcRenderer.send(this.wsRunning ? 'stop-ws' : 'start-ws');
+      },
+
+      toggleMode() {
+        this.fullscreenMode = !this.fullscreenMode;
+        const btn = document.getElementById('mode-btn');
+        btn.textContent = this.fullscreenMode ? 'Fullscreen' : 'Windowed';
+        btn.className = this.fullscreenMode ? 'active' : '';
+        
+        ipcRenderer.send('save-fullscreen-preference', this.fullscreenMode);
+        
+        this.showToast(`Mode switched to ${this.fullscreenMode ? 'Fullscreen' : 'Windowed'}`);
+      },
+
+      toggleViewport() {
+        this.viewportOpen = !this.viewportOpen;
+        const btn = document.getElementById('viewport-btn');
+        btn.textContent = this.viewportOpen ? 'Close ViewPort' : 'Open ViewPort';
+        btn.className = this.viewportOpen ? 'danger' : '';
+        this.showToast(this.viewportOpen ? 'ViewPort opened' : 'ViewPort closed');
+      },
+
+      quit() {
+        this.showToast('Quitting application...');
+        setTimeout(() => {
+          ipcRenderer.send('quit-app');
+        }, 500);
+      }
+    };
+
+    // Checkbox handlers with IPC
+    document.getElementById('hide-cursor').addEventListener('change', (e) => {
+      ipcRenderer.send('save-hide-cursor-preference', e.target.checked);
+      app.showToast(`Hide cursor: ${e.target.checked ? 'enabled' : 'disabled'}`);
+    });
+
+    document.getElementById('auto-start').addEventListener('change', (e) => {
+      ipcRenderer.send('save-auto-start-ws-preference', e.target.checked);
+      app.showToast(`Auto-start WebSocket: ${e.target.checked ? 'enabled' : 'disabled'} (applies on next launch)`);
+    });
+
+    document.getElementById('show-fps').addEventListener('change', (e) => {
+      ipcRenderer.send('save-show-fps-preference', e.target.checked);
+      app.showToast(`FPS display: ${e.target.checked ? 'enabled' : 'disabled'}`);
+    });
+
+    // Initialize app
+    app.init();
+    console.log('✅ App UI loaded successfully');
+  </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "name": "junctionrelay_virtualdevice2",
+  "version": "0.0.4",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:pi": "electron-builder --linux --arm64"
+  },
+  "devDependencies": {
+    "electron": "^30.5.1",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.test.pi",
+    "productName": "PiTest",
+    "linux": {
+      "target": "tar.gz",
+      "category": "Utility"
+    }
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}
