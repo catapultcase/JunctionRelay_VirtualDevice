@@ -7,7 +7,7 @@
  * SINGLETON: Designed to persist across component mounts/unmounts
  */
 
-class ElectronDataProvider {
+export class ElectronDataProvider {
     static instance = null;
     
     constructor(options = {}) {
@@ -251,5 +251,3 @@ class ElectronDataProvider {
         }
     }
 }
-
-module.exports = { ElectronDataProvider };
