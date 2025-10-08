@@ -152,6 +152,10 @@
             <span>Auto-start WebSocket server on launch</span>
           </label>
           <label>
+            <input type="checkbox" id="auto-open-viz">
+            <span>Auto-open visualization on stream detection</span>
+          </label>
+          <label>
             <input type="checkbox" id="show-fps">
             <span>Show FPS overlay in visualization</span>
           </label>
@@ -175,11 +179,12 @@
       async init() {
         // Load preferences
         try {
-          const [version, fullscreen, hideCursor, autoStart, showFps, ips] = await Promise.all([
+          const [version, fullscreen, hideCursor, autoStart, autoOpenViz, showFps, ips] = await Promise.all([
             ipcRenderer.invoke('get-app-version'),
             ipcRenderer.invoke('get-fullscreen-preference'),
             ipcRenderer.invoke('get-hide-cursor-preference'),
             ipcRenderer.invoke('get-auto-start-ws-preference'),
+            ipcRenderer.invoke('get-auto-open-viz-preference'),
             ipcRenderer.invoke('get-show-fps-preference'),
             ipcRenderer.invoke('get-local-ips')
           ]);
@@ -194,6 +199,7 @@
           this.localIps = ips || [];
           document.getElementById('hide-cursor').checked = hideCursor;
           document.getElementById('auto-start').checked = autoStart;
+          document.getElementById('auto-open-viz').checked = autoOpenViz;
           document.getElementById('show-fps').checked = showFps;
 
           // Update mode button
@@ -323,6 +329,11 @@
     document.getElementById('auto-start').addEventListener('change', (e) => {
       ipcRenderer.send('save-auto-start-ws-preference', e.target.checked);
       app.showToast(`Auto-start WebSocket: ${e.target.checked ? 'enabled' : 'disabled'} (applies on next launch)`);
+    });
+
+    document.getElementById('auto-open-viz').addEventListener('change', (e) => {
+      ipcRenderer.send('save-auto-open-viz-preference', e.target.checked);
+      app.showToast(`Auto-open visualization: ${e.target.checked ? 'enabled' : 'disabled'}`);
     });
 
     document.getElementById('show-fps').addEventListener('change', (e) => {

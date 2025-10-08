@@ -96,6 +96,15 @@ function forwardMessageToRenderer(doc) {
   if (type === 'rive_config') {
     cachedConfig = doc;
     console.log('[Main] Cached rive_config');
+    
+    // Auto-open visualization if preference is enabled
+    const prefs = loadPreferences();
+    if (prefs.autoOpenVisualization && (!visualizationWindow || visualizationWindow.isDestroyed())) {
+      console.log('[Main] Auto-opening visualization window on stream detection');
+      const fullscreen = prefs.fullscreenMode ?? true;
+      const hideCursor = prefs.hideCursor ?? true;
+      openVisualizationWindow({ fullscreen, hideCursor });
+    }
   } else if (type === 'rive_sensor') {
     cachedSensor = doc;
   }
@@ -126,6 +135,68 @@ function forwardMessageToRenderer(doc) {
   }
 }
 
+// Helper function to open visualization window
+function openVisualizationWindow(options) {
+  if (visualizationWindow && !visualizationWindow.isDestroyed()) {
+    visualizationWindow.focus();
+    return;
+  }
+
+  const { fullscreen = true, hideCursor = true } = options || {};
+
+  visualizationWindow = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    fullscreen: fullscreen,
+    frame: !fullscreen,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  // Load the built React app
+  const visualizationPath = path.join(__dirname, 'dist-react', 'visualization.html');
+  
+  if (fs.existsSync(visualizationPath)) {
+    visualizationWindow.loadFile(visualizationPath);
+  } else {
+    // Fallback for development
+    visualizationWindow.loadURL('http://localhost:5173/visualization.html');
+  }
+
+  visualizationWindow.webContents.on('did-finish-load', () => {
+    console.log('[Main] Visualization window loaded');
+    
+    // Small delay to ensure renderer is ready, then send cached data and preferences
+    setTimeout(() => {
+      if (visualizationWindow && !visualizationWindow.isDestroyed()) {
+        // Send cached data first
+        sendCachedData(visualizationWindow);
+        
+        // Set cursor visibility
+        if (fullscreen && hideCursor) {
+          visualizationWindow.webContents.send('set-cursor-visibility', false);
+        }
+
+        // Notify main window
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('visualization-opened');
+        }
+      }
+    }, 100);
+  });
+
+  visualizationWindow.on('closed', () => {
+    visualizationWindow = null;
+    
+    // Notify main window
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('visualization-closed');
+    }
+  });
+}
+
 // IPC Handlers
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
@@ -149,6 +220,11 @@ ipcMain.handle('get-auto-start-ws-preference', () => {
 ipcMain.handle('get-show-fps-preference', () => {
   const prefs = loadPreferences();
   return prefs.showFps ?? false;
+});
+
+ipcMain.handle('get-auto-open-viz-preference', () => {
+  const prefs = loadPreferences();
+  return prefs.autoOpenVisualization ?? false;
 });
 
 ipcMain.on('save-fullscreen-preference', (_event, value) => {
@@ -175,8 +251,18 @@ ipcMain.on('save-show-fps-preference', (_event, value) => {
   savePreferences(prefs);
 });
 
+ipcMain.on('save-auto-open-viz-preference', (_event, value) => {
+  const prefs = loadPreferences();
+  prefs.autoOpenVisualization = value;
+  savePreferences(prefs);
+});
+
 ipcMain.on('quit-app', () => {
   console.log('Quit requested');
+  if (wsServer && wsServer.isRunning()) {
+    console.log('Stopping WebSocket server...');
+    wsServer.stop();
+  }
   app.quit();
 });
 
@@ -251,64 +337,7 @@ ipcMain.handle('get-local-ips', () => {
 
 // Visualization window handlers
 ipcMain.on('open-visualization', (_event, options) => {
-  if (visualizationWindow && !visualizationWindow.isDestroyed()) {
-    visualizationWindow.focus();
-    return;
-  }
-
-  const { fullscreen = true, hideCursor = true } = options || {};
-
-  visualizationWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    fullscreen: fullscreen,
-    frame: !fullscreen,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
-  });
-
-  // Load the built React app
-  const visualizationPath = path.join(__dirname, 'dist-react', 'visualization.html');
-  
-  if (fs.existsSync(visualizationPath)) {
-    visualizationWindow.loadFile(visualizationPath);
-  } else {
-    // Fallback for development
-    visualizationWindow.loadURL('http://localhost:5173/visualization.html');
-  }
-
-  visualizationWindow.webContents.on('did-finish-load', () => {
-    console.log('[Main] Visualization window loaded');
-    
-    // Small delay to ensure renderer is ready, then send cached data and preferences
-    setTimeout(() => {
-      if (visualizationWindow && !visualizationWindow.isDestroyed()) {
-        // Send cached data first
-        sendCachedData(visualizationWindow);
-        
-        // Set cursor visibility
-        if (fullscreen && hideCursor) {
-          visualizationWindow.webContents.send('set-cursor-visibility', false);
-        }
-
-        // Notify main window
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('visualization-opened');
-        }
-      }
-    }, 100);
-  });
-
-  visualizationWindow.on('closed', () => {
-    visualizationWindow = null;
-    
-    // Notify main window
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('visualization-closed');
-    }
-  });
+  openVisualizationWindow(options);
 });
 
 ipcMain.on('close-visualization', () => {
@@ -328,7 +357,18 @@ app.whenReady().then(() => {
     setTimeout(() => {
       wsServer = new WebSocketServerManager(8081);
       wsServer.onMessage = forwardMessageToRenderer;
-      wsServer.start();
+      const started = wsServer.start();
+      
+      if (started) {
+        const ips = wsServer.getLocalIPs();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('ws-status', { 
+            ok: true, 
+            message: `WebSocket server started on port 8081`,
+            ips 
+          });
+        }
+      }
     }, 1000);
   }
 });
