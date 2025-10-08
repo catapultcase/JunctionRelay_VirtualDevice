@@ -18,6 +18,10 @@ let mainWindow = null;
 let visualizationWindow = null;
 let wsServer = null;
 
+// Cache for WebSocket messages
+let cachedConfig = null;
+let cachedSensor = null;
+
 // Preferences storage
 const userDataPath = app.getPath('userData');
 const prefsPath = path.join(userDataPath, 'preferences.json');
@@ -57,11 +61,69 @@ function createWindow() {
   
   mainWindow.webContents.on('did-finish-load', () => {
     console.log('SUCCESS: Window loaded!');
+    // Send cached data to main window
+    sendCachedData(mainWindow);
   });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+}
+
+// Helper function to send cached data to a window
+function sendCachedData(window) {
+  if (!window || window.isDestroyed()) return;
+  
+  try {
+    if (cachedConfig) {
+      console.log('[Main] Sending cached config to window');
+      window.webContents.send('rive-config', cachedConfig);
+    }
+    if (cachedSensor) {
+      console.log('[Main] Sending cached sensor to window');
+      window.webContents.send('rive-sensor-data', cachedSensor);
+    }
+  } catch (err) {
+    console.log('[Main] Failed to send cached data:', err);
+  }
+}
+
+// Forward WebSocket messages to renderer and cache them
+function forwardMessageToRenderer(doc) {
+  const type = doc?.type;
+  
+  // Cache the messages
+  if (type === 'rive_config') {
+    cachedConfig = doc;
+    console.log('[Main] Cached rive_config');
+  } else if (type === 'rive_sensor') {
+    cachedSensor = doc;
+  }
+  
+  // Forward to visualization window if open
+  if (visualizationWindow && !visualizationWindow.isDestroyed()) {
+    try {
+      if (type === 'rive_config') {
+        console.log('[Main] Forwarding rive_config to visualization window');
+        visualizationWindow.webContents.send('rive-config', doc);
+      } else if (type === 'rive_sensor') {
+        visualizationWindow.webContents.send('rive-sensor-data', doc);
+      }
+    } catch (err) {
+      console.error('[Main] Error forwarding message:', err);
+    }
+  }
+
+  // Also forward to main window for logging
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      if (type === 'rive_config') {
+        mainWindow.webContents.send('rive-config', doc);
+      }
+    } catch (err) {
+      // Ignore
+    }
+  }
 }
 
 // IPC Handlers
@@ -122,34 +184,6 @@ ipcMain.on('open-external', (_event, url) => {
   console.log('Would open external URL:', url);
   // We'll add shell.openExternal later
 });
-
-// Forward WebSocket messages to renderer
-function forwardMessageToRenderer(doc) {
-  // Forward to visualization window if open
-  if (visualizationWindow && !visualizationWindow.isDestroyed()) {
-    try {
-      const type = doc?.type;
-      
-      if (type === 'rive_config') {
-        console.log('[Main] Forwarding rive_config to visualization window');
-        visualizationWindow.webContents.send('rive-config', doc);
-      } else if (type === 'rive_sensor') {
-        visualizationWindow.webContents.send('rive-sensor-data', doc);
-      }
-    } catch (err) {
-      console.error('[Main] Error forwarding message:', err);
-    }
-  }
-
-  // Also forward to main window for logging
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    try {
-      mainWindow.webContents.send('rive-config', doc);
-    } catch (err) {
-      // Ignore
-    }
-  }
-}
 
 // WebSocket handlers
 ipcMain.on('start-ws', (event) => {
@@ -248,15 +282,23 @@ ipcMain.on('open-visualization', (_event, options) => {
   visualizationWindow.webContents.on('did-finish-load', () => {
     console.log('[Main] Visualization window loaded');
     
-    // Set cursor visibility
-    if (fullscreen && hideCursor) {
-      visualizationWindow.webContents.send('set-cursor-visibility', false);
-    }
+    // Small delay to ensure renderer is ready, then send cached data and preferences
+    setTimeout(() => {
+      if (visualizationWindow && !visualizationWindow.isDestroyed()) {
+        // Send cached data first
+        sendCachedData(visualizationWindow);
+        
+        // Set cursor visibility
+        if (fullscreen && hideCursor) {
+          visualizationWindow.webContents.send('set-cursor-visibility', false);
+        }
 
-    // Notify main window
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('visualization-opened');
-    }
+        // Notify main window
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('visualization-opened');
+        }
+      }
+    }, 100);
   });
 
   visualizationWindow.on('closed', () => {
@@ -278,6 +320,17 @@ ipcMain.on('close-visualization', () => {
 app.whenReady().then(() => {
   console.log('App ready');
   createWindow();
+  
+  // Auto-start WebSocket if preference is enabled
+  const prefs = loadPreferences();
+  if (prefs.autoStartWs) {
+    console.log('[Main] Auto-starting WebSocket server...');
+    setTimeout(() => {
+      wsServer = new WebSocketServerManager(8081);
+      wsServer.onMessage = forwardMessageToRenderer;
+      wsServer.start();
+    }, 1000);
+  }
 });
 
 app.on('window-all-closed', () => {

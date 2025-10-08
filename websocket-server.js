@@ -221,8 +221,10 @@ class WebSocketServerManager {
       const doc = JSON.parse(buf.toString('utf8'));
       console.log('[WebSocket] Received:', doc.type || 'unknown');
       
-      // You can add callbacks here later
-      // this.emit('document', doc);
+      // Forward to callback if set
+      if (this.onMessage && typeof this.onMessage === 'function') {
+        this.onMessage(doc);
+      }
     } catch (e) {
       console.error('[WebSocket] JSON parse failed:', e.message);
     }
