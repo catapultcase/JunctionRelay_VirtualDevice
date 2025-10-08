@@ -14,6 +14,7 @@ class WebSocketServerManager {
     this.messagesReceived = 0;
     this.messagesSent = 0;
     this.cachedMac = null;
+    this.onMessage = null; // Callback for forwarding messages
     
     // Stream processor state per client
     this.clientProcessors = new Map();
@@ -220,8 +221,10 @@ class WebSocketServerManager {
       const doc = JSON.parse(buf.toString('utf8'));
       console.log('[WebSocket] Received:', doc.type || 'unknown');
       
-      // You can add callbacks here later
-      // this.emit('document', doc);
+      // Forward to callback if set
+      if (this.onMessage && typeof this.onMessage === 'function') {
+        this.onMessage(doc);
+      }
     } catch (e) {
       console.error('[WebSocket] JSON parse failed:', e.message);
     }

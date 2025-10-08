@@ -15,7 +15,12 @@ if (process.platform === 'linux' && (process.arch === 'arm' || process.arch === 
 }
 
 let mainWindow = null;
+let visualizationWindow = null;
 let wsServer = null;
+
+// Cache for WebSocket messages
+let cachedConfig = null;
+let cachedSensor = null;
 
 // Preferences storage
 const userDataPath = app.getPath('userData');
@@ -56,10 +61,139 @@ function createWindow() {
   
   mainWindow.webContents.on('did-finish-load', () => {
     console.log('SUCCESS: Window loaded!');
+    // Send cached data to main window
+    sendCachedData(mainWindow);
   });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+}
+
+// Helper function to send cached data to a window
+function sendCachedData(window) {
+  if (!window || window.isDestroyed()) return;
+  
+  try {
+    if (cachedConfig) {
+      console.log('[Main] Sending cached config to window');
+      window.webContents.send('rive-config', cachedConfig);
+    }
+    if (cachedSensor) {
+      console.log('[Main] Sending cached sensor to window');
+      window.webContents.send('rive-sensor-data', cachedSensor);
+    }
+  } catch (err) {
+    console.log('[Main] Failed to send cached data:', err);
+  }
+}
+
+// Forward WebSocket messages to renderer and cache them
+function forwardMessageToRenderer(doc) {
+  const type = doc?.type;
+  
+  // Cache the messages
+  if (type === 'rive_config') {
+    cachedConfig = doc;
+    console.log('[Main] Cached rive_config');
+    
+    // Auto-open visualization if preference is enabled
+    const prefs = loadPreferences();
+    if (prefs.autoOpenVisualization && (!visualizationWindow || visualizationWindow.isDestroyed())) {
+      console.log('[Main] Auto-opening visualization window on stream detection');
+      const fullscreen = prefs.fullscreenMode ?? true;
+      const hideCursor = prefs.hideCursor ?? true;
+      openVisualizationWindow({ fullscreen, hideCursor });
+    }
+  } else if (type === 'rive_sensor') {
+    cachedSensor = doc;
+  }
+  
+  // Forward to visualization window if open
+  if (visualizationWindow && !visualizationWindow.isDestroyed()) {
+    try {
+      if (type === 'rive_config') {
+        console.log('[Main] Forwarding rive_config to visualization window');
+        visualizationWindow.webContents.send('rive-config', doc);
+      } else if (type === 'rive_sensor') {
+        visualizationWindow.webContents.send('rive-sensor-data', doc);
+      }
+    } catch (err) {
+      console.error('[Main] Error forwarding message:', err);
+    }
+  }
+
+  // Also forward to main window for logging
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      if (type === 'rive_config') {
+        mainWindow.webContents.send('rive-config', doc);
+      }
+    } catch (err) {
+      // Ignore
+    }
+  }
+}
+
+// Helper function to open visualization window
+function openVisualizationWindow(options) {
+  if (visualizationWindow && !visualizationWindow.isDestroyed()) {
+    visualizationWindow.focus();
+    return;
+  }
+
+  const { fullscreen = true, hideCursor = true } = options || {};
+
+  visualizationWindow = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    fullscreen: fullscreen,
+    frame: !fullscreen,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  // Load the built React app
+  const visualizationPath = path.join(__dirname, 'dist-react', 'visualization.html');
+  
+  if (fs.existsSync(visualizationPath)) {
+    visualizationWindow.loadFile(visualizationPath);
+  } else {
+    // Fallback for development
+    visualizationWindow.loadURL('http://localhost:5173/visualization.html');
+  }
+
+  visualizationWindow.webContents.on('did-finish-load', () => {
+    console.log('[Main] Visualization window loaded');
+    
+    // Small delay to ensure renderer is ready, then send cached data and preferences
+    setTimeout(() => {
+      if (visualizationWindow && !visualizationWindow.isDestroyed()) {
+        // Send cached data first
+        sendCachedData(visualizationWindow);
+        
+        // Set cursor visibility
+        if (fullscreen && hideCursor) {
+          visualizationWindow.webContents.send('set-cursor-visibility', false);
+        }
+
+        // Notify main window
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('visualization-opened');
+        }
+      }
+    }, 100);
+  });
+
+  visualizationWindow.on('closed', () => {
+    visualizationWindow = null;
+    
+    // Notify main window
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('visualization-closed');
+    }
   });
 }
 
@@ -88,6 +222,11 @@ ipcMain.handle('get-show-fps-preference', () => {
   return prefs.showFps ?? false;
 });
 
+ipcMain.handle('get-auto-open-viz-preference', () => {
+  const prefs = loadPreferences();
+  return prefs.autoOpenVisualization ?? false;
+});
+
 ipcMain.on('save-fullscreen-preference', (_event, value) => {
   const prefs = loadPreferences();
   prefs.fullscreenMode = value;
@@ -112,8 +251,18 @@ ipcMain.on('save-show-fps-preference', (_event, value) => {
   savePreferences(prefs);
 });
 
+ipcMain.on('save-auto-open-viz-preference', (_event, value) => {
+  const prefs = loadPreferences();
+  prefs.autoOpenVisualization = value;
+  savePreferences(prefs);
+});
+
 ipcMain.on('quit-app', () => {
   console.log('Quit requested');
+  if (wsServer && wsServer.isRunning()) {
+    console.log('Stopping WebSocket server...');
+    wsServer.stop();
+  }
   app.quit();
 });
 
@@ -131,6 +280,10 @@ ipcMain.on('start-ws', (event) => {
 
   try {
     wsServer = new WebSocketServerManager(8081);
+    
+    // Setup message forwarding
+    wsServer.onMessage = forwardMessageToRenderer;
+    
     const started = wsServer.start();
     
     if (started) {
@@ -182,9 +335,42 @@ ipcMain.handle('get-local-ips', () => {
   return ips.length ? ips : ['0.0.0.0'];
 });
 
+// Visualization window handlers
+ipcMain.on('open-visualization', (_event, options) => {
+  openVisualizationWindow(options);
+});
+
+ipcMain.on('close-visualization', () => {
+  if (visualizationWindow && !visualizationWindow.isDestroyed()) {
+    visualizationWindow.close();
+  }
+});
+
 app.whenReady().then(() => {
   console.log('App ready');
   createWindow();
+  
+  // Auto-start WebSocket if preference is enabled
+  const prefs = loadPreferences();
+  if (prefs.autoStartWs) {
+    console.log('[Main] Auto-starting WebSocket server...');
+    setTimeout(() => {
+      wsServer = new WebSocketServerManager(8081);
+      wsServer.onMessage = forwardMessageToRenderer;
+      const started = wsServer.start();
+      
+      if (started) {
+        const ips = wsServer.getLocalIPs();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('ws-status', { 
+            ok: true, 
+            message: `WebSocket server started on port 8081`,
+            ips 
+          });
+        }
+      }
+    }, 1000);
+  }
 });
 
 app.on('window-all-closed', () => {

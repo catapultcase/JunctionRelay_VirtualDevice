@@ -1,0 +1,29 @@
+npm run dev (vite)
+npm start (electron)
+
+
+
+npm run build
+
+
+Remove-Item -Recurse -Force dist, dist-electron   
+
+npm ci
+npm run build:pi
+
+npm ci ; npm run build:pi
+
+
+npm ci
+npm run build:windows
+
+npm ci ; npm run build:windows
+
+
+export DISPLAY=:0
+   xhost +local:
+
+
+
+
+scp dist/junctionrelay_virtualdevice2-*.tar.gz rusty6285@10.168.1.27:~/Downloads/
