@@ -1,12 +1,13 @@
 {
   "name": "junctionrelay-virtualdevice",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dev": "vite",
     "build:react": "vite build",
-    "build:pi": "npm run build:react && electron-builder --linux --arm64"
+    "build:pi": "npm run build:react && electron-builder --linux --arm64",
+    "build:windows": "npm run build:react && electron-builder --windows"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -28,7 +29,7 @@
   },
   "build": {
     "appId": "com.junctionrelay.virtualdevice",
-    "productName": "JunctionRelay Virtual Device",
+    "productName": "JunctionRelay_VirtualDevice",
     "files": [
       "main.js",
       "websocket-server.js",
@@ -38,7 +39,12 @@
     ],
     "linux": {
       "target": "tar.gz",
-      "category": "Utility"
+      "category": "Utility",
+      "icon": "build/JunctionRelay.png"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/JunctionRelay.ico"
     }
   }
 }

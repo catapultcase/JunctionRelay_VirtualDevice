@@ -26,4 +26,4 @@ export DISPLAY=:0
 
 
 
-scp dist/junctionrelay_virtualdevice2-*.tar.gz rusty6285@10.168.1.27:~/Downloads/
+scp dist/junctionrelay-virtualdevice-*.tar.gz rusty6285@10.168.1.27:~/Downloads/
