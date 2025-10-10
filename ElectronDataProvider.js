@@ -146,25 +146,13 @@ export class ElectronDataProvider {
         console.log('[ElectronDataProvider] Setting up IPC listeners');
 
         this.handleRiveConfig = (_event, data) => {
-            console.log('[ElectronDataProvider] Received rive-config:', data);
-
             try {
-                // Transform the data to match RiveConfig interface
                 const transformedConfig = {
                     type: "rive_config",
                     screenId: data.screenId || "electron-virtual-device",
-                    frameConfig: {
-                        frameConfig: data.frameConfig?.frameConfig || data.frameConfig,
-                        ...(data.frameConfig?.frameConfig || data.frameConfig)
-                    },
+                    frameConfig: data.frameConfig || {},
                     frameElements: data.frameElements || []
                 };
-
-                // Add Rive file URL if present
-                const riveConfig = data.frameConfig?.frameConfig?.rive || data.frameConfig?.rive;
-                if (riveConfig?.fileUrl) {
-                    transformedConfig.riveFile = riveConfig.fileUrl;
-                }
 
                 console.log(`[ElectronDataProvider] Notifying ${this.configCallbacks.length} config callbacks`);
 
@@ -183,8 +171,6 @@ export class ElectronDataProvider {
         };
 
         this.handleSensorData = (_event, data) => {
-            console.log('[ElectronDataProvider] Received sensor data');
-
             try {
                 // Transform to match SensorPayload interface
                 const transformedData = {

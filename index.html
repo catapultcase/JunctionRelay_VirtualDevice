@@ -57,6 +57,23 @@
       background: #dc3545;
       border-color: #dc3545;
     }
+    select {
+      padding: 10px 14px;
+      background: #333;
+      color: white;
+      border: 1px solid #555;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      min-width: 200px;
+    }
+    select:hover {
+      background: #444;
+    }
+    select:focus {
+      outline: none;
+      border-color: #007acc;
+    }
     hr {
       margin: 12px 0;
       border: none;
@@ -80,6 +97,16 @@
       gap: 8px;
       cursor: pointer;
       font-size: 14px;
+    }
+    .select-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .select-label {
+      font-size: 14px;
+      color: #9aa0a6;
     }
     #quit-btn {
       position: fixed;
@@ -142,6 +169,13 @@
           <button id="viewport-btn" onclick="app.toggleViewport()">Open ViewPort</button>
         </div>
 
+        <div class="select-group">
+          <span class="select-label">Display Monitor:</span>
+          <select id="monitor-select">
+            <option value="0">Loading displays...</option>
+          </select>
+        </div>
+
         <div class="checkbox-group">
           <label>
             <input type="checkbox" id="hide-cursor" checked>
@@ -175,18 +209,22 @@
       fullscreenMode: true,
       viewportOpen: false,
       localIps: [],
+      displays: [],
+      selectedDisplayId: 0,
 
       async init() {
-        // Load preferences
+        // Load preferences and displays
         try {
-          const [version, fullscreen, hideCursor, autoStart, autoOpenViz, showFps, ips] = await Promise.all([
+          const [version, fullscreen, hideCursor, autoStart, autoOpenViz, showFps, ips, displays, savedDisplayId] = await Promise.all([
             ipcRenderer.invoke('get-app-version'),
             ipcRenderer.invoke('get-fullscreen-preference'),
             ipcRenderer.invoke('get-hide-cursor-preference'),
             ipcRenderer.invoke('get-auto-start-ws-preference'),
             ipcRenderer.invoke('get-auto-open-viz-preference'),
             ipcRenderer.invoke('get-show-fps-preference'),
-            ipcRenderer.invoke('get-local-ips')
+            ipcRenderer.invoke('get-local-ips'),
+            ipcRenderer.invoke('get-displays'),
+            ipcRenderer.invoke('get-display-preference')
           ]);
 
           // Set version
@@ -201,6 +239,10 @@
           document.getElementById('auto-start').checked = autoStart;
           document.getElementById('auto-open-viz').checked = autoOpenViz;
           document.getElementById('show-fps').checked = showFps;
+
+          // Setup displays
+          this.displays = displays || [];
+          this.populateDisplaySelect(savedDisplayId);
 
           // Update mode button
           const modeBtn = document.getElementById('mode-btn');
@@ -244,6 +286,56 @@
           btn.textContent = 'Open ViewPort';
           btn.className = '';
         });
+
+        // Listen for display changes
+        ipcRenderer.on('displays-changed', (_event, displays) => {
+          this.displays = displays;
+          this.populateDisplaySelect(this.selectedDisplayId);
+        });
+      },
+
+      populateDisplaySelect(savedDisplayId) {
+        const select = document.getElementById('monitor-select');
+        select.innerHTML = '';
+
+        if (this.displays.length === 0) {
+          const option = document.createElement('option');
+          option.value = '0';
+          option.textContent = 'Primary Display';
+          select.appendChild(option);
+          this.selectedDisplayId = 0;
+          return;
+        }
+
+        // Check if saved display still exists
+        const savedDisplayExists = this.displays.some(d => d.id === savedDisplayId);
+        const displayToSelect = savedDisplayExists ? savedDisplayId : this.displays[0].id;
+
+        this.displays.forEach((display, index) => {
+          const option = document.createElement('option');
+          option.value = display.id;
+          
+          let label = `Display ${index + 1}`;
+          if (display.primary) {
+            label += ' (Primary)';
+          }
+          label += ` - ${display.bounds.width}x${display.bounds.height}`;
+          if (display.label) {
+            label += ` - ${display.label}`;
+          }
+          
+          option.textContent = label;
+          select.appendChild(option);
+        });
+
+        select.value = displayToSelect;
+        this.selectedDisplayId = displayToSelect;
+
+        // If saved display no longer exists, save the new default
+        if (!savedDisplayExists && savedDisplayId !== null) {
+          ipcRenderer.send('save-display-preference', displayToSelect);
+          this.showToast('Previous display unavailable, using primary display');
+        }
       },
 
       updateHeader() {
@@ -307,7 +399,8 @@
           ipcRenderer.send('open-visualization', {
             fullscreen: this.fullscreenMode,
             hideCursor: document.getElementById('hide-cursor').checked,
-            showFps: document.getElementById('show-fps').checked
+            showFps: document.getElementById('show-fps').checked,
+            displayId: this.selectedDisplayId
           });
         }
       },
@@ -339,6 +432,17 @@
     document.getElementById('show-fps').addEventListener('change', (e) => {
       ipcRenderer.send('save-show-fps-preference', e.target.checked);
       app.showToast(`FPS display: ${e.target.checked ? 'enabled' : 'disabled'}`);
+    });
+
+    // Monitor select handler
+    document.getElementById('monitor-select').addEventListener('change', (e) => {
+      const displayId = parseInt(e.target.value);
+      app.selectedDisplayId = displayId;
+      ipcRenderer.send('save-display-preference', displayId);
+      
+      const selectedDisplay = app.displays.find(d => d.id === displayId);
+      const displayName = selectedDisplay ? `Display ${app.displays.indexOf(selectedDisplay) + 1}` : 'selected display';
+      app.showToast(`Viewport will open on ${displayName}`);
     });
 
     // Initialize app

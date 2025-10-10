@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { WebSocketServerManager } = require('./websocket-server');
@@ -43,6 +43,31 @@ function savePreferences(prefs) {
   } catch (err) {
     console.error('Failed to save preferences:', err);
   }
+}
+
+function getDisplays() {
+  if (!app.isReady()) {
+    return [];
+  }
+  const displays = screen.getAllDisplays();
+  return displays.map(display => ({
+    id: display.id,
+    bounds: display.bounds,
+    workArea: display.workArea,
+    scaleFactor: display.scaleFactor,
+    rotation: display.rotation,
+    internal: display.internal,
+    primary: display.bounds.x === 0 && display.bounds.y === 0,
+    label: display.label || null
+  }));
+}
+
+function getDisplayById(displayId) {
+  if (!app.isReady()) {
+    return null;
+  }
+  const displays = screen.getAllDisplays();
+  return displays.find(d => d.id === displayId) || displays[0];
 }
 
 function createWindow() {
@@ -122,7 +147,8 @@ function forwardMessageToRenderer(doc) {
       console.log('[Main] Auto-opening visualization window on stream detection');
       const fullscreen = prefs.fullscreenMode ?? true;
       const hideCursor = prefs.hideCursor ?? true;
-      openVisualizationWindow({ fullscreen, hideCursor });
+      const displayId = prefs.displayId ?? null;
+      openVisualizationWindow({ fullscreen, hideCursor, displayId });
     } else if (visualizationWindow && !visualizationWindow.isDestroyed()) {
       // Resize existing window if not fullscreen
       resizeVisualizationWindow(doc);
@@ -164,7 +190,7 @@ function openVisualizationWindow(options) {
     return;
   }
 
-  const { fullscreen = true, hideCursor = true } = options || {};
+  const { fullscreen = true, hideCursor = true, displayId = null } = options || {};
 
   // Get dimensions from cached config if available and not fullscreen
   let windowWidth = 1280;
@@ -176,20 +202,69 @@ function openVisualizationWindow(options) {
     console.log(`[Main] Using canvas dimensions: ${windowWidth}x${windowHeight}`);
   }
 
-  visualizationWindow = new BrowserWindow({
-    width: windowWidth,
-    height: windowHeight,
-    fullscreen: fullscreen,
-    frame: !fullscreen,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
-  });
+  // Get the target display
+  let targetDisplay = displayId !== null ? getDisplayById(displayId) : null;
+  
+  if (!targetDisplay && app.isReady()) {
+    targetDisplay = screen.getPrimaryDisplay();
+  }
+  
+  // Fallback to primary if display not found
+  if (!targetDisplay) {
+    console.log('[Main] Display not found, using default dimensions');
+    // Use default dimensions if screen API not available yet
+    const x = 0;
+    const y = 0;
+    
+    visualizationWindow = new BrowserWindow({
+      width: windowWidth,
+      height: windowHeight,
+      x: x,
+      y: y,
+      fullscreen: fullscreen,
+      frame: !fullscreen,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
+    });
+  } else {
+    console.log(`[Main] Opening visualization on display ${targetDisplay.id} at bounds:`, targetDisplay.bounds);
 
-  // Center the window
-  if (!fullscreen) {
-    visualizationWindow.center();
+    // Calculate window position for the selected display
+    const displayBounds = targetDisplay.bounds;
+    let x = displayBounds.x;
+    let y = displayBounds.y;
+
+    // Center window on display if not fullscreen
+    if (!fullscreen) {
+      x = displayBounds.x + Math.floor((displayBounds.width - windowWidth) / 2);
+      y = displayBounds.y + Math.floor((displayBounds.height - windowHeight) / 2);
+    }
+
+    visualizationWindow = new BrowserWindow({
+      width: windowWidth,
+      height: windowHeight,
+      x: x,
+      y: y,
+      fullscreen: fullscreen,
+      frame: !fullscreen,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
+    });
+
+    // If fullscreen, move to the correct display and then set fullscreen
+    if (fullscreen) {
+      visualizationWindow.setBounds({ 
+        x: displayBounds.x, 
+        y: displayBounds.y,
+        width: displayBounds.width,
+        height: displayBounds.height
+      });
+      visualizationWindow.setFullScreen(true);
+    }
   }
 
   // Load the built React app
@@ -264,6 +339,27 @@ ipcMain.handle('get-auto-open-viz-preference', () => {
   return prefs.autoOpenVisualization ?? false;
 });
 
+ipcMain.handle('get-display-preference', () => {
+  const prefs = loadPreferences();
+  const savedDisplayId = prefs.displayId ?? null;
+  
+  // Only validate if app is ready and screen API is available
+  if (savedDisplayId !== null && app.isReady()) {
+    const displays = screen.getAllDisplays();
+    const displayExists = displays.some(d => d.id === savedDisplayId);
+    if (!displayExists) {
+      console.log('[Main] Saved display no longer exists, resetting to primary');
+      return null;
+    }
+  }
+  
+  return savedDisplayId;
+});
+
+ipcMain.handle('get-displays', () => {
+  return getDisplays();
+});
+
 ipcMain.on('save-fullscreen-preference', (_event, value) => {
   const prefs = loadPreferences();
   prefs.fullscreenMode = value;
@@ -292,6 +388,13 @@ ipcMain.on('save-auto-open-viz-preference', (_event, value) => {
   const prefs = loadPreferences();
   prefs.autoOpenVisualization = value;
   savePreferences(prefs);
+});
+
+ipcMain.on('save-display-preference', (_event, value) => {
+  const prefs = loadPreferences();
+  prefs.displayId = value;
+  savePreferences(prefs);
+  console.log('[Main] Saved display preference:', value);
 });
 
 ipcMain.on('quit-app', () => {
@@ -392,9 +495,37 @@ ipcMain.on('close-visualization-window', (event) => {
   }
 });
 
+// Listen for display changes (only after app is ready)
+function setupDisplayListeners() {
+  screen.on('display-added', () => {
+    console.log('[Main] Display added');
+    notifyDisplaysChanged();
+  });
+
+  screen.on('display-removed', () => {
+    console.log('[Main] Display removed');
+    notifyDisplaysChanged();
+  });
+
+  screen.on('display-metrics-changed', () => {
+    console.log('[Main] Display metrics changed');
+    notifyDisplaysChanged();
+  });
+}
+
+function notifyDisplaysChanged() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const displays = getDisplays();
+    mainWindow.webContents.send('displays-changed', displays);
+  }
+}
+
 app.whenReady().then(() => {
   console.log('App ready');
   createWindow();
+  
+  // Setup display listeners after app is ready
+  setupDisplayListeners();
   
   // Auto-start WebSocket if preference is enabled
   const prefs = loadPreferences();
