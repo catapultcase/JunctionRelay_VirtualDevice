@@ -85,11 +85,39 @@
       flex-wrap: wrap;
       align-items: center;
     }
+    .settings-card {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+    .settings-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #eaeaea;
+      margin-bottom: 12px;
+    }
     .checkbox-group {
       display: flex;
       flex-direction: column;
       gap: 8px;
       margin-top: 8px;
+    }
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 8px;
+    }
+    .checkbox-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .checkbox-col:first-child {
+      padding-right: 16px;
+      border-right: 1px solid #333;
     }
     label {
       display: flex;
@@ -107,6 +135,42 @@
     .select-label {
       font-size: 14px;
       color: #9aa0a6;
+    }
+    .position-selector {
+      display: grid;
+      grid-template-columns: repeat(3, 50px);
+      grid-template-rows: repeat(3, 50px);
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .position-btn {
+      width: 50px;
+      height: 50px;
+      padding: 0;
+      background: #333;
+      border: 2px solid #555;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: #9aa0a6;
+    }
+    .position-btn:hover {
+      background: #444;
+      border-color: #666;
+    }
+    .position-btn.active {
+      background: #007acc;
+      border-color: #007acc;
+      color: white;
+    }
+    .position-btn.disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      background: #222;
     }
     #quit-btn {
       position: fixed;
@@ -169,30 +233,50 @@
           <button id="viewport-btn" onclick="app.toggleViewport()">Open ViewPort</button>
         </div>
 
-        <div class="select-group">
-          <span class="select-label">Display Monitor:</span>
-          <select id="monitor-select">
-            <option value="0">Loading displays...</option>
-          </select>
-        </div>
+        <div class="settings-card">
+          <div class="settings-title">Settings</div>
+          <div class="checkbox-grid">
+          <div class="checkbox-col">
+            <div class="select-group" style="margin-top: 0;">
+              <span class="select-label">Display Monitor:</span>
+              <select id="monitor-select">
+                <option value="0">Loading displays...</option>
+              </select>
+            </div>
+            <label>
+              <input type="checkbox" id="hide-cursor" checked>
+              <span>Hide cursor in fullscreen mode</span>
+            </label>
+            <label>
+              <input type="checkbox" id="auto-start">
+              <span>Auto-start WebSocket server on launch</span>
+            </label>
+            <label>
+              <input type="checkbox" id="auto-open-viz">
+              <span>Auto-open visualization on stream detection</span>
+            </label>
+          </div>
 
-        <div class="checkbox-group">
-          <label>
-            <input type="checkbox" id="hide-cursor" checked>
-            <span>Hide cursor in fullscreen mode</span>
-          </label>
-          <label>
-            <input type="checkbox" id="auto-start">
-            <span>Auto-start WebSocket server on launch</span>
-          </label>
-          <label>
-            <input type="checkbox" id="auto-open-viz">
-            <span>Auto-open visualization on stream detection</span>
-          </label>
-          <label>
-            <input type="checkbox" id="show-fps">
-            <span>Show FPS overlay in visualization</span>
-          </label>
+          <div class="checkbox-col">
+            <label>
+              <input type="checkbox" id="show-fps">
+              <span>Show FPS overlay in visualization</span>
+            </label>
+            <div class="select-group" style="margin-top: 0;">
+              <span class="select-label">FPS Counter Position:</span>
+              <div class="position-selector">
+                <button class="position-btn active" data-position="top-left" onclick="app.setFpsPosition('top-left')">TL</button>
+                <button class="position-btn disabled"></button>
+                <button class="position-btn" data-position="top-right" onclick="app.setFpsPosition('top-right')">TR</button>
+                <button class="position-btn disabled"></button>
+                <button class="position-btn" data-position="center" onclick="app.setFpsPosition('center')">C</button>
+                <button class="position-btn disabled"></button>
+                <button class="position-btn" data-position="bottom-left" onclick="app.setFpsPosition('bottom-left')">BL</button>
+                <button class="position-btn disabled"></button>
+                <button class="position-btn" data-position="bottom-right" onclick="app.setFpsPosition('bottom-right')">BR</button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </main>
@@ -211,11 +295,12 @@
       localIps: [],
       displays: [],
       selectedDisplayId: 0,
+      fpsPosition: 'top-left',
 
       async init() {
         // Load preferences and displays
         try {
-          const [version, fullscreen, hideCursor, autoStart, autoOpenViz, showFps, ips, displays, savedDisplayId] = await Promise.all([
+          const [version, fullscreen, hideCursor, autoStart, autoOpenViz, showFps, ips, displays, savedDisplayId, fpsPosition] = await Promise.all([
             ipcRenderer.invoke('get-app-version'),
             ipcRenderer.invoke('get-fullscreen-preference'),
             ipcRenderer.invoke('get-hide-cursor-preference'),
@@ -224,7 +309,8 @@
             ipcRenderer.invoke('get-show-fps-preference'),
             ipcRenderer.invoke('get-local-ips'),
             ipcRenderer.invoke('get-displays'),
-            ipcRenderer.invoke('get-display-preference')
+            ipcRenderer.invoke('get-display-preference'),
+            ipcRenderer.invoke('get-fps-position-preference')
           ]);
 
           // Set version
@@ -235,6 +321,7 @@
           // Set preferences
           this.fullscreenMode = fullscreen;
           this.localIps = ips || [];
+          this.fpsPosition = fpsPosition || 'top-left';
           document.getElementById('hide-cursor').checked = hideCursor;
           document.getElementById('auto-start').checked = autoStart;
           document.getElementById('auto-open-viz').checked = autoOpenViz;
@@ -243,6 +330,9 @@
           // Setup displays
           this.displays = displays || [];
           this.populateDisplaySelect(savedDisplayId);
+
+          // Update position selector
+          this.updatePositionSelector();
 
           // Update mode button
           const modeBtn = document.getElementById('mode-btn');
@@ -352,6 +442,30 @@
         }
       },
 
+      updatePositionSelector() {
+        document.querySelectorAll('.position-btn').forEach(btn => {
+          btn.classList.remove('active');
+          if (btn.dataset.position === this.fpsPosition) {
+            btn.classList.add('active');
+          }
+        });
+      },
+
+      setFpsPosition(position) {
+        this.fpsPosition = position;
+        this.updatePositionSelector();
+        ipcRenderer.send('save-fps-position-preference', position);
+        
+        const labels = {
+          'top-left': 'Top Left',
+          'top-right': 'Top Right',
+          'bottom-left': 'Bottom Left',
+          'bottom-right': 'Bottom Right',
+          'center': 'Center'
+        };
+        this.showToast(`FPS position: ${labels[position]}`);
+      },
+
       showToast(msg, type = 'info') {
         const existing = document.querySelector('.toast');
         if (existing) existing.remove();
@@ -400,7 +514,8 @@
             fullscreen: this.fullscreenMode,
             hideCursor: document.getElementById('hide-cursor').checked,
             showFps: document.getElementById('show-fps').checked,
-            displayId: this.selectedDisplayId
+            displayId: this.selectedDisplayId,
+            fpsPosition: this.fpsPosition
           });
         }
       },

@@ -75,7 +75,7 @@ function createWindow() {
   
   mainWindow = new BrowserWindow({
     width: 800,
-    height: 600,
+    height: 700,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
@@ -148,7 +148,8 @@ function forwardMessageToRenderer(doc) {
       const fullscreen = prefs.fullscreenMode ?? true;
       const hideCursor = prefs.hideCursor ?? true;
       const displayId = prefs.displayId ?? null;
-      openVisualizationWindow({ fullscreen, hideCursor, displayId });
+      const fpsPosition = prefs.fpsPosition ?? 'top-left';
+      openVisualizationWindow({ fullscreen, hideCursor, displayId, fpsPosition });
     } else if (visualizationWindow && !visualizationWindow.isDestroyed()) {
       // Resize existing window if not fullscreen
       resizeVisualizationWindow(doc);
@@ -190,7 +191,7 @@ function openVisualizationWindow(options) {
     return;
   }
 
-  const { fullscreen = true, hideCursor = true, displayId = null } = options || {};
+  const { fullscreen = true, hideCursor = true, displayId = null, fpsPosition = 'top-left' } = options || {};
 
   // Get dimensions from cached config if available and not fullscreen
   let windowWidth = 1280;
@@ -291,6 +292,9 @@ function openVisualizationWindow(options) {
           visualizationWindow.webContents.send('set-cursor-visibility', false);
         }
 
+        // Send FPS position preference
+        visualizationWindow.webContents.send('set-fps-position', fpsPosition);
+
         // Notify main window
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('visualization-opened');
@@ -332,6 +336,11 @@ ipcMain.handle('get-auto-start-ws-preference', () => {
 ipcMain.handle('get-show-fps-preference', () => {
   const prefs = loadPreferences();
   return prefs.showFps ?? false;
+});
+
+ipcMain.handle('get-fps-position-preference', () => {
+  const prefs = loadPreferences();
+  return prefs.fpsPosition ?? 'top-left';
 });
 
 ipcMain.handle('get-auto-open-viz-preference', () => {
@@ -381,6 +390,12 @@ ipcMain.on('save-auto-start-ws-preference', (_event, value) => {
 ipcMain.on('save-show-fps-preference', (_event, value) => {
   const prefs = loadPreferences();
   prefs.showFps = value;
+  savePreferences(prefs);
+});
+
+ipcMain.on('save-fps-position-preference', (_event, value) => {
+  const prefs = loadPreferences();
+  prefs.fpsPosition = value;
   savePreferences(prefs);
 });
 

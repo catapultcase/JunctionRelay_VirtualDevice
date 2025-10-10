@@ -13,6 +13,7 @@ const deviceData = {
 function VisualizationApp() {
   const [showFps, setShowFps] = useState(false);
   const [cursorVisible, setCursorVisible] = useState(true);
+  const [fpsPosition, setFpsPosition] = useState('top-left');
 
   useEffect(() => {
     const { ipcRenderer } = require('electron');
@@ -22,10 +23,19 @@ function VisualizationApp() {
       if (fps !== null) setShowFps(fps);
     });
 
+    ipcRenderer.invoke('get-fps-position-preference').then(pos => {
+      if (pos) setFpsPosition(pos);
+    });
+
     // Listen for cursor visibility changes
     const handleCursorVisibility = (_event, visible) => {
       setCursorVisible(visible);
       document.body.style.cursor = visible ? 'default' : 'none';
+    };
+
+    // Listen for FPS position changes
+    const handleFpsPosition = (_event, position) => {
+      setFpsPosition(position);
     };
 
     // Handle Escape key to close window
@@ -42,12 +52,14 @@ function VisualizationApp() {
     // Add both window and document listeners for better coverage
     console.log('[VisualizationApp] Adding keyboard listeners');
     ipcRenderer.on('set-cursor-visibility', handleCursorVisibility);
+    ipcRenderer.on('set-fps-position', handleFpsPosition);
     window.addEventListener('keydown', handleKeyDown, true); // Use capture phase
     document.addEventListener('keydown', handleKeyDown, true);
 
     return () => {
       console.log('[VisualizationApp] Removing keyboard listeners');
       ipcRenderer.off('set-cursor-visibility', handleCursorVisibility);
+      ipcRenderer.off('set-fps-position', handleFpsPosition);
       window.removeEventListener('keydown', handleKeyDown, true);
       document.removeEventListener('keydown', handleKeyDown, true);
     };
@@ -81,7 +93,7 @@ function VisualizationApp() {
           showControls={showFps}
           dataProvider={dataProvider}
         />
-        <FpsCounter visible={showFps} />
+        <FpsCounter visible={showFps} position={fpsPosition} />
       </div>
     </BrowserRouter>
   );
