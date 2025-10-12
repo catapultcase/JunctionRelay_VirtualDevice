@@ -180,6 +180,18 @@
       font-size: 12px;
       z-index: 1000;
     }
+    #devtools-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 90px;
+      padding: 8px 12px;
+      font-size: 12px;
+      z-index: 1000;
+      background: #555;
+    }
+    #devtools-btn:hover {
+      background: #666;
+    }
     #version {
       position: fixed;
       bottom: 20px;
@@ -255,6 +267,10 @@
               <input type="checkbox" id="auto-open-viz">
               <span>Auto-open visualization on stream detection</span>
             </label>
+            <label>
+              <input type="checkbox" id="start-minimized">
+              <span>Start with main window minimized to tray</span>
+            </label>
           </div>
 
           <div class="checkbox-col">
@@ -281,6 +297,7 @@
       </section>
     </main>
 
+    <button id="devtools-btn" onclick="app.toggleDevTools()">DevTools</button>
     <button id="quit-btn" class="danger" onclick="app.quit()">Quit</button>
     <div id="version"></div>
   </div>
@@ -300,7 +317,7 @@
       async init() {
         // Load preferences and displays
         try {
-          const [version, fullscreen, hideCursor, autoStart, autoOpenViz, showFps, ips, displays, savedDisplayId, fpsPosition] = await Promise.all([
+          const [version, fullscreen, hideCursor, autoStart, autoOpenViz, showFps, ips, displays, savedDisplayId, fpsPosition, startMinimized] = await Promise.all([
             ipcRenderer.invoke('get-app-version'),
             ipcRenderer.invoke('get-fullscreen-preference'),
             ipcRenderer.invoke('get-hide-cursor-preference'),
@@ -310,7 +327,8 @@
             ipcRenderer.invoke('get-local-ips'),
             ipcRenderer.invoke('get-displays'),
             ipcRenderer.invoke('get-display-preference'),
-            ipcRenderer.invoke('get-fps-position-preference')
+            ipcRenderer.invoke('get-fps-position-preference'),
+            ipcRenderer.invoke('get-start-minimized-preference')
           ]);
 
           // Set version
@@ -326,6 +344,7 @@
           document.getElementById('auto-start').checked = autoStart;
           document.getElementById('auto-open-viz').checked = autoOpenViz;
           document.getElementById('show-fps').checked = showFps;
+          document.getElementById('start-minimized').checked = startMinimized;
 
           // Setup displays
           this.displays = displays || [];
@@ -520,6 +539,10 @@
         }
       },
 
+      toggleDevTools() {
+        ipcRenderer.send('toggle-devtools');
+      },
+
       quit() {
         this.showToast('Quitting application...');
         setTimeout(() => {
@@ -547,6 +570,11 @@
     document.getElementById('show-fps').addEventListener('change', (e) => {
       ipcRenderer.send('save-show-fps-preference', e.target.checked);
       app.showToast(`FPS display: ${e.target.checked ? 'enabled' : 'disabled'}`);
+    });
+
+    document.getElementById('start-minimized').addEventListener('change', (e) => {
+      ipcRenderer.send('save-start-minimized-preference', e.target.checked);
+      app.showToast(`Start minimized: ${e.target.checked ? 'enabled' : 'disabled'} (applies on next launch)`);
     });
 
     // Monitor select handler
