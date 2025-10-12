@@ -35,6 +35,7 @@
       "websocket-server.js",
       "ElectronDataProvider.js",
       "index.html",
+      "icon.png",
       "dist-react/**/*"
     ],
     "linux": {

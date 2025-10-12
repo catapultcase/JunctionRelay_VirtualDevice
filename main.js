@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { WebSocketServerManager } = require('./websocket-server');
@@ -17,6 +17,7 @@ if (process.platform === 'linux' && (process.arch === 'arm' || process.arch === 
 let mainWindow = null;
 let visualizationWindow = null;
 let wsServer = null;
+let tray = null;
 
 // Cache for WebSocket messages
 let cachedConfig = null;
@@ -70,15 +71,81 @@ function getDisplayById(displayId) {
   return displays.find(d => d.id === displayId) || displays[0];
 }
 
+function createTray() {
+  const iconPath = path.join(__dirname, 'icon.png');
+  
+  // Check if icon exists, otherwise skip tray creation
+  if (!fs.existsSync(iconPath)) {
+    console.log('[Tray] Icon not found at:', iconPath);
+    return;
+  }
+
+  tray = new Tray(iconPath);
+  
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Settings',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      }
+    },
+    {
+      label: 'Toggle Visualization',
+      click: () => {
+        if (visualizationWindow && !visualizationWindow.isDestroyed()) {
+          visualizationWindow.close();
+        } else {
+          const prefs = loadPreferences();
+          const fullscreen = prefs.fullscreenMode ?? true;
+          const hideCursor = prefs.hideCursor ?? true;
+          const displayId = prefs.displayId ?? null;
+          const fpsPosition = prefs.fpsPosition ?? 'top-left';
+          openVisualizationWindow({ fullscreen, hideCursor, displayId, fpsPosition });
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        app.isQuitting = true;
+        if (wsServer && wsServer.isRunning()) {
+          wsServer.stop();
+        }
+        app.quit();
+      }
+    }
+  ]);
+  
+  tray.setToolTip('JunctionRelay Virtual Device');
+  tray.setContextMenu(contextMenu);
+  
+  // Double-click to show main window
+  tray.on('double-click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+  
+  console.log('[Tray] System tray icon created');
+}
+
 function createWindow() {
   console.log('Creating window...');
   
   mainWindow = new BrowserWindow({
     width: 800,
     height: 700,
+    resizable: false,
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false
+      contextIsolation: false,
+      devTools: true
     }
   });
 
@@ -86,12 +153,36 @@ function createWindow() {
   
   mainWindow.webContents.on('did-finish-load', () => {
     console.log('SUCCESS: Window loaded!');
+    
+    // Check if should start minimized
+    const prefs = loadPreferences();
+    if (prefs.startMinimized) {
+      console.log('[Main] Starting minimized to tray');
+      mainWindow.hide();
+    }
+    
     // Send cached data to main window
     sendCachedData(mainWindow);
   });
 
+  // Prevent window from closing, hide it instead
+  mainWindow.on('close', (event) => {
+    if (!app.isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+      console.log('[Main] Window hidden to tray');
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+
+  // Handle minimize - hide to tray
+  mainWindow.on('minimize', (event) => {
+    event.preventDefault();
+    mainWindow.hide();
+    console.log('[Main] Window minimized to tray');
   });
 }
 
@@ -348,6 +439,11 @@ ipcMain.handle('get-auto-open-viz-preference', () => {
   return prefs.autoOpenVisualization ?? false;
 });
 
+ipcMain.handle('get-start-minimized-preference', () => {
+  const prefs = loadPreferences();
+  return prefs.startMinimized ?? false;
+});
+
 ipcMain.handle('get-display-preference', () => {
   const prefs = loadPreferences();
   const savedDisplayId = prefs.displayId ?? null;
@@ -405,6 +501,12 @@ ipcMain.on('save-auto-open-viz-preference', (_event, value) => {
   savePreferences(prefs);
 });
 
+ipcMain.on('save-start-minimized-preference', (_event, value) => {
+  const prefs = loadPreferences();
+  prefs.startMinimized = value;
+  savePreferences(prefs);
+});
+
 ipcMain.on('save-display-preference', (_event, value) => {
   const prefs = loadPreferences();
   prefs.displayId = value;
@@ -412,8 +514,20 @@ ipcMain.on('save-display-preference', (_event, value) => {
   console.log('[Main] Saved display preference:', value);
 });
 
+ipcMain.on('toggle-devtools', (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (window) {
+    if (window.webContents.isDevToolsOpened()) {
+      window.webContents.closeDevTools();
+    } else {
+      window.webContents.openDevTools();
+    }
+  }
+});
+
 ipcMain.on('quit-app', () => {
   console.log('Quit requested');
+  app.isQuitting = true;
   if (wsServer && wsServer.isRunning()) {
     console.log('Stopping WebSocket server...');
     wsServer.stop();
@@ -537,6 +651,10 @@ function notifyDisplaysChanged() {
 
 app.whenReady().then(() => {
   console.log('App ready');
+  
+  // Create tray icon first
+  createTray();
+  
   createWindow();
   
   // Setup display listeners after app is ready
@@ -566,8 +684,15 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (wsServer) {
-    wsServer.stop();
+  // Don't quit on window close if tray exists
+  if (!tray) {
+    if (wsServer) {
+      wsServer.stop();
+    }
+    app.quit();
   }
-  app.quit();
+});
+
+app.on('before-quit', () => {
+  app.isQuitting = true;
 });
