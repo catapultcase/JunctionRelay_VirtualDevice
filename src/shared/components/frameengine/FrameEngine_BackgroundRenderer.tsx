@@ -17,7 +17,7 @@
  * along with JunctionRelay. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     useRive,
     Layout,
@@ -48,9 +48,15 @@ export interface DiscoveredDataBinding {
 
 // Background configuration types
 export interface BackgroundConfig {
-    type: 'color' | 'image' | 'rive';
+    type: 'color' | 'image' | 'video' | 'rive';
     color?: string;
     imageUrl?: string;
+    imageFit?: 'cover' | 'contain' | 'fill' | 'tile' | 'stretch' | 'none';
+    videoUrl?: string;
+    videoFit?: 'cover' | 'contain' | 'fill' | 'stretch' | 'none';
+    videoLoop?: boolean;
+    videoMuted?: boolean;
+    videoAutoplay?: boolean;
     riveFile?: string;
     riveStateMachine?: string;
     riveInputs?: Record<string, any>;
@@ -79,7 +85,8 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
 }) => {
     const [discoveredInputs, setDiscoveredInputs] = useState<Record<string, any>>({});
     const [discoveredBindings, setDiscoveredBindings] = useState<Record<string, any>>({});
-    const [riveKey, setRiveKey] = useState(0); // Force re-initialization on file change
+    const [riveKey, setRiveKey] = useState(0);
+    const videoRef = useRef<HTMLVideoElement>(null);
 
     // Detect Rive file changes and force remount
     useEffect(() => {
@@ -115,7 +122,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
         return {
             src: riveFileUrl,
             autoplay: true,
-            autoBind: true, // Critical for data bindings
+            autoBind: true,
             layout: new Layout({
                 fit: layoutFit,
                 alignment: Alignment.Center
@@ -129,7 +136,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                 if (onRiveError) onRiveError(error);
             },
         };
-    }, [config.type, config.riveFile, fit, onRiveLoad, onRiveError, riveKey]); // Add riveKey to dependencies
+    }, [config.type, config.riveFile, fit, onRiveLoad, onRiveError, riveKey]);
 
     // Initialize Rive
     const { rive, RiveComponent } = useRive(riveOptions || { src: '', autoplay: false });
@@ -147,15 +154,12 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
             attempts++;
 
             try {
-                // Get state machine names
                 const smNames: string[] = Array.isArray(rive.stateMachineNames) ? rive.stateMachineNames : [];
 
-                // Ensure machines are running so inputs wire up
                 smNames.forEach((sm) => {
                     try { rive.play(sm); } catch { }
                 });
 
-                // Discover state machines and inputs
                 const machines: DiscoveredStateMachine[] = smNames.map((smName) => {
                     const inputs: DiscoveredInput[] = [];
 
@@ -382,12 +386,10 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                 console.log('🔍 BackgroundRenderer discovered state machines:', machines);
                 console.log('🔍 BackgroundRenderer discovered data bindings:', dataBindings);
 
-                // Call the discovery callback
                 if (onRiveDiscovery) {
                     onRiveDiscovery(machines, dataBindings);
                 }
 
-                // Continue polling if we haven't found everything
                 const totalInputs = machines.reduce((sum, m) => sum + m.inputs.length, 0);
                 const totalBindings = dataBindings.length;
 
@@ -412,7 +414,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
         };
     }, [rive, config.type, onRiveDiscovery]);
 
-    // Input binding logic - applies input values to Rive
+    // Input binding logic
     useEffect(() => {
         if (!rive || config.type !== 'rive' || !config.riveInputs) return;
 
@@ -426,45 +428,29 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
             attempts++;
 
             try {
-                // Get available state machines
                 const smNames: string[] = Array.isArray(rive.stateMachineNames) ? rive.stateMachineNames : [];
 
-                // Ensure machines are running so inputs wire up
                 smNames.forEach((sm) => {
                     try { rive.play(sm); } catch { }
                 });
 
                 const newDiscoveredInputs: Record<string, any> = {};
 
-                // Process each input we want to bind
                 Object.entries(config.riveInputs || {}).forEach(([inputKey, inputValue]) => {
-                    // Parse the input key to extract state machine and input name
                     let targetMachine: string;
                     let inputName: string;
 
                     if (inputKey.includes('.')) {
-                        // New format: "StateMachineName.InputName"
                         const parts = inputKey.split('.');
                         targetMachine = parts[0];
-                        inputName = parts.slice(1).join('.'); // Handle input names with dots
+                        inputName = parts.slice(1).join('.');
                     } else {
-                        // Legacy format: just "InputName" - use specified state machine or first available
                         targetMachine = config.riveStateMachine || smNames[0];
                         inputName = inputKey;
                     }
 
-                    if (!targetMachine) {
-                        console.warn(`⚠️ No target state machine found for input "${inputKey}"`);
-                        return;
-                    }
-
-                    // Check if this state machine exists
-                    if (!smNames.includes(targetMachine)) {
-                        console.warn(`⚠️ State machine "${targetMachine}" not found. Available: ${smNames.join(', ')}`);
-                        return;
-                    }
-
-                    // console.log(`🔍 Looking for input "${inputName}" in state machine "${targetMachine}"`);
+                    if (!targetMachine) return;
+                    if (!smNames.includes(targetMachine)) return;
 
                     const machineInputs = rive.stateMachineInputs
                         ? (rive.stateMachineInputs(targetMachine) as any[])
@@ -473,9 +459,8 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                     const foundInput = machineInputs.find((i) => i?.name === inputName);
 
                     if (foundInput) {
-                        inputRefs[inputKey] = foundInput; // Use original key for tracking
+                        inputRefs[inputKey] = foundInput;
 
-                        // Determine input type by probing
                         let inputType = 'unknown';
                         let hasValue = false;
                         let currentValue: any;
@@ -490,7 +475,6 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                                 inputType = 'boolean';
                             }
                         } catch {
-                            // If no readable value, check for trigger
                             try {
                                 if (typeof foundInput.fire === 'function') {
                                     inputType = 'trigger';
@@ -506,32 +490,23 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                             inputName: inputName
                         };
 
-                        // Apply the input value
                         try {
                             if (inputType === 'trigger') {
-                                // For triggers, fire if the value is truthy
                                 if (inputValue && typeof foundInput.fire === 'function') {
                                     foundInput.fire();
-                                    console.log(`🔥 Fired trigger "${inputName}" in "${targetMachine}"`);
                                 }
                             } else if (hasValue) {
-                                // For number/boolean inputs
                                 const newValue = inputType === 'boolean' ? Boolean(inputValue) : Number(inputValue) || 0;
                                 foundInput.value = newValue;
-                                // console.log(`✅ Set "${inputName}" in "${targetMachine}" (${inputType}) to:`, newValue);
                             }
                         } catch (error) {
                             console.error(`❌ Error applying input "${inputName}" in "${targetMachine}":`, error);
                         }
-                    } else {
-                        console.warn(`⚠️ Input "${inputName}" not found in state machine "${targetMachine}"`);
-                        console.log(`Available inputs in "${targetMachine}":`, machineInputs.map(i => i?.name).filter(Boolean));
                     }
                 });
 
                 setDiscoveredInputs(newDiscoveredInputs);
 
-                // If we didn't find all inputs and haven't exhausted attempts, keep trying
                 const foundCount = Object.keys(newDiscoveredInputs).length;
                 const expectedCount = Object.keys(config.riveInputs || {}).length;
 
@@ -555,7 +530,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
         };
     }, [rive, config.type, config.riveStateMachine, config.riveInputs]);
 
-    // Enhanced data binding logic with improved color handling
+    // Data binding logic
     useEffect(() => {
         if (!rive || config.type !== 'rive' || !config.riveBindings) return;
 
@@ -568,11 +543,9 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
             attempts++;
 
             try {
-
                 const vmi = (rive as any).viewModelInstance;
 
                 if (!vmi) {
-                    console.log('No viewModelInstance found for data binding');
                     if (attempts < maxAttempts) {
                         setTimeout(discoverAndBindDataBindings, 120 * attempts);
                     }
@@ -581,14 +554,10 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
 
                 const newDiscoveredBindings: Record<string, any> = {};
 
-                // Process each binding we want to apply
                 Object.entries(config.riveBindings || {}).forEach(([bindingName, bindingValue]) => {
-                    // console.log(`🔍 Looking for data binding "${bindingName}"`);
-
                     let foundBinding = null;
                     let bindingType = 'unknown';
 
-                    // Try to find the binding by type using official API
                     const accessors = [
                         { fn: 'number', type: 'number' as const },
                         { fn: 'string', type: 'string' as const },
@@ -607,9 +576,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                                 bindingType = accessor.type;
                                 break;
                             }
-                        } catch (e) {
-                            // This type doesn't work for this binding
-                        }
+                        } catch (e) { }
                     }
 
                     if (foundBinding) {
@@ -619,85 +586,42 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                             currentValue: foundBinding.value
                         };
 
-                        // Apply the binding value using official API with enhanced color handling
                         try {
                             if (bindingType === 'number') {
                                 foundBinding.value = Number(bindingValue) || 0;
-                                // console.log(`✅ Set data binding "${bindingName}" (number) to:`, bindingValue);
                             } else if (bindingType === 'boolean') {
                                 foundBinding.value = Boolean(bindingValue);
-                                // console.log(`✅ Set data binding "${bindingName}" (boolean) to:`, bindingValue);
                             } else if (bindingType === 'string') {
                                 foundBinding.value = String(bindingValue || '');
-                                // console.log(`✅ Set data binding "${bindingName}" (string) to:`, bindingValue);
                             } else if (bindingType === 'color') {
-                                // Enhanced color handling from your Rive tester
-                                // console.log(`🎨 COLOR BINDING ATTEMPT for ${bindingName}:`, bindingValue);
-
                                 let colorValue: number;
 
                                 if (typeof bindingValue === 'string' && bindingValue.startsWith('#')) {
-                                    // Convert hex string to ARGB format
                                     const hexValue = parseInt(bindingValue.slice(1), 16);
-
                                     const r = (hexValue >> 16) & 0xFF;
                                     const g = (hexValue >> 8) & 0xFF;
                                     const b = hexValue & 0xFF;
-
-                                    console.log(`   → RGB components: R=${r}, G=${g}, B=${b}`);
-                                    console.log(`   → Original hex: ${bindingValue} (${hexValue})`);
-
-                                    // Use ARGB format (Alpha, Red, Green, Blue)
                                     colorValue = (0xFF << 24) | (r << 16) | (g << 8) | b;
-
-                                    console.log(`   → Using ARGB format: ${colorValue} (0x${colorValue.toString(16).padStart(8, '0')})`);
-
                                 } else if (typeof bindingValue === 'number') {
-                                    colorValue = bindingValue >>> 0; // Ensure unsigned 32-bit
+                                    colorValue = bindingValue >>> 0;
                                 } else {
-                                    console.warn(`   → Unsupported color value format:`, bindingValue);
                                     return;
                                 }
 
-                                foundBinding.value = colorValue >>> 0; // Ensure unsigned 32-bit
-                                // console.log(`   → Set binding.ref.value to: ${foundBinding.value} (0x${foundBinding.value.toString(16).padStart(8, '0')})`);
-
-                                // Force a refresh/update if available
-                                try {
-                                    if (foundBinding.markDirty) {
-                                        foundBinding.markDirty();
-                                        console.log(`   → Called markDirty() on color binding`);
-                                    }
-                                    if (foundBinding.update) {
-                                        foundBinding.update();
-                                        console.log(`   → Called update() on color binding`);
-                                    }
-                                    if (foundBinding.notify) {
-                                        foundBinding.notify();
-                                        console.log(`   → Called notify() on color binding`);
-                                    }
-                                } catch (e) {
-                                    console.log(`   → No refresh methods available on binding`);
-                                }
-
-                                // console.log(`✅ Set data binding "${bindingName}" (color) to:`, bindingValue);
+                                foundBinding.value = colorValue >>> 0;
                             } else if (bindingType === 'trigger') {
                                 if (bindingValue && typeof foundBinding.fire === 'function') {
                                     foundBinding.fire();
-                                    console.log(`🔥 Fired data binding trigger "${bindingName}"`);
                                 }
                             }
                         } catch (error) {
                             console.error(`❌ Error applying data binding "${bindingName}":`, error);
                         }
-                    } else {
-                        console.warn(`⚠️ Data binding "${bindingName}" not found`);
                     }
                 });
 
                 setDiscoveredBindings(newDiscoveredBindings);
 
-                // If we didn't find all bindings and haven't exhausted attempts, keep trying
                 const foundCount = Object.keys(newDiscoveredBindings).length;
                 const expectedCount = Object.keys(config.riveBindings || {}).length;
 
@@ -731,17 +655,13 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
 
             try {
                 if (discovered.type === 'trigger') {
-                    // For triggers, fire if the value is truthy and different from last time
                     if (inputValue && typeof discovered.ref.fire === 'function') {
                         discovered.ref.fire();
-                        console.log(`🔥 Fired trigger "${discovered.inputName}" in "${discovered.stateMachine}" via update`);
                     }
                 } else {
-                    // For number/boolean inputs
                     const newValue = discovered.type === 'boolean' ? Boolean(inputValue) : Number(inputValue) || 0;
                     if (discovered.ref.value !== newValue) {
                         discovered.ref.value = newValue;
-                        console.log(`🔄 Updated "${discovered.inputName}" in "${discovered.stateMachine}" to:`, newValue);
                     }
                 }
             } catch (error) {
@@ -750,7 +670,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
         });
     }, [config.type, config.riveInputs, discoveredInputs]);
 
-    // Apply data binding changes when bindings prop changes with enhanced color handling
+    // Apply data binding changes when bindings prop changes
     useEffect(() => {
         if (config.type !== 'rive' || !config.riveBindings || Object.keys(discoveredBindings).length === 0) return;
 
@@ -767,35 +687,44 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                 } else if (discovered.type === 'string') {
                     newValue = String(bindingValue || '');
                 } else if (discovered.type === 'color') {
-                    // Enhanced color handling for updates
                     if (typeof bindingValue === 'string' && bindingValue.startsWith('#')) {
                         const hexValue = parseInt(bindingValue.slice(1), 16);
                         const r = (hexValue >> 16) & 0xFF;
                         const g = (hexValue >> 8) & 0xFF;
                         const b = hexValue & 0xFF;
-                        newValue = (0xFF << 24) | (r << 16) | (g << 8) | b; // ARGB format
+                        newValue = (0xFF << 24) | (r << 16) | (g << 8) | b;
                     } else {
                         newValue = Number(bindingValue) || 0;
                     }
                 } else if (discovered.type === 'trigger') {
                     if (bindingValue && typeof discovered.ref.fire === 'function') {
                         discovered.ref.fire();
-                        console.log(`🔄 Fired data binding trigger "${bindingName}"`);
                     }
                     return;
                 } else {
-                    return; // Unknown type
+                    return;
                 }
 
                 if (discovered.ref.value !== newValue) {
                     discovered.ref.value = newValue;
-                    // console.log(`🔄 Updated data binding "${bindingName}" to:`, newValue);
                 }
             } catch (error) {
                 console.error(`❌ Error updating data binding "${bindingName}":`, error);
             }
         });
     }, [config.type, config.riveBindings, discoveredBindings]);
+
+    // Get object-fit CSS value from fit mode
+    const getObjectFit = (fitMode?: string): React.CSSProperties['objectFit'] => {
+        switch (fitMode) {
+            case 'cover': return 'cover';
+            case 'contain': return 'contain';
+            case 'fill': return 'fill';
+            case 'none': return 'none';
+            case 'stretch': return 'fill'; // CSS doesn't have stretch, use fill
+            default: return 'cover';
+        }
+    };
 
     // Get container styles based on background type
     const getContainerStyles = React.useMemo((): React.CSSProperties => {
@@ -817,19 +746,35 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                 };
 
             case 'image':
-                // Generate image URL from filename
                 const imageUrl = config.imageUrl
                     ? (config.imageUrl.startsWith('http')
                         ? config.imageUrl
                         : `/api/frameengine/background-images/${config.imageUrl}/content`)
                     : undefined;
 
+                // Handle tile mode separately
+                if (config.imageFit === 'tile') {
+                    return {
+                        ...baseStyles,
+                        backgroundImage: imageUrl ? `url(${imageUrl})` : undefined,
+                        backgroundSize: 'auto',
+                        backgroundPosition: 'top left',
+                        backgroundRepeat: 'repeat',
+                    };
+                }
+
                 return {
                     ...baseStyles,
                     backgroundImage: imageUrl ? `url(${imageUrl})` : undefined,
-                    backgroundSize: 'cover',
+                    backgroundSize: config.imageFit === 'none' ? 'auto' : (config.imageFit || 'cover'),
                     backgroundPosition: 'center',
                     backgroundRepeat: 'no-repeat',
+                };
+
+            case 'video':
+                return {
+                    ...baseStyles,
+                    backgroundColor: 'transparent',
                 };
 
             case 'rive':
@@ -844,11 +789,40 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                     backgroundColor: '#FFFFFF',
                 };
         }
-    }, [config.type, config.color, config.imageUrl, width, height]);
+    }, [config.type, config.color, config.imageUrl, config.imageFit, width, height]);
 
     // Render based on background type
     const renderContent = () => {
         switch (config.type) {
+            case 'video':
+                if (!config.videoUrl) {
+                    return null;
+                }
+
+                const videoUrl = config.videoUrl.startsWith('http')
+                    ? config.videoUrl
+                    : `/api/frameengine/background-videos/${config.videoUrl}/content`;
+
+                return (
+                    <video
+                        ref={videoRef}
+                        src={videoUrl}
+                        loop={config.videoLoop ?? true}
+                        muted={config.videoMuted ?? true}
+                        autoPlay={config.videoAutoplay ?? true}
+                        playsInline
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: getObjectFit(config.videoFit),
+                            display: 'block',
+                        }}
+                        onError={(e) => {
+                            console.error('❌ Video background load error:', e);
+                        }}
+                    />
+                );
+
             case 'rive':
                 if (!config.riveFile || !RiveComponent) {
                     return null;
@@ -856,7 +830,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
 
                 return (
                     <RiveComponent
-                        key={riveKey} // Force remount on file change
+                        key={riveKey}
                         style={{
                             width: width,
                             height: height,
@@ -871,11 +845,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                 );
 
             case 'image':
-                // Background image is handled via CSS, no additional content needed
-                return null;
-
             case 'color':
-                // Background color is handled via CSS, no additional content needed
                 return null;
 
             default:
