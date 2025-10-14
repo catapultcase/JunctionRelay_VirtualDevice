@@ -817,9 +817,16 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                 };
 
             case 'image':
+                // Generate image URL from filename
+                const imageUrl = config.imageUrl
+                    ? (config.imageUrl.startsWith('http')
+                        ? config.imageUrl
+                        : `/api/frameengine/background-images/${config.imageUrl}/content`)
+                    : undefined;
+
                 return {
                     ...baseStyles,
-                    backgroundImage: config.imageUrl ? `url(${config.imageUrl})` : undefined,
+                    backgroundImage: imageUrl ? `url(${imageUrl})` : undefined,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                     backgroundRepeat: 'no-repeat',
