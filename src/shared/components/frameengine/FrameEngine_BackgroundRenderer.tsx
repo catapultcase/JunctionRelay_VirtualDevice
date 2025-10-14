@@ -141,7 +141,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
     // Initialize Rive
     const { rive, RiveComponent } = useRive(riveOptions || { src: '', autoplay: false });
 
-    // Discovery logic using the correct approach from Rive documentation
+    // Discovery logic - STREAMLINED VERSION
     useEffect(() => {
         if (!rive || config.type !== 'rive') return;
 
@@ -209,7 +209,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                     };
                 });
 
-                // Discover data bindings using the correct approach
+                // Discover data bindings - SIMPLIFIED TO ONLY USE WORKING CODE
                 const dataBindings: DiscoveredDataBinding[] = [];
 
                 try {
@@ -217,164 +217,55 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                     if (vmi) {
                         console.log("Found viewModelInstance:", vmi);
 
-                        // Get the view model from the rive instance to access property descriptors
-                        const viewModel = (rive as any).viewModel;
-                        console.log("ViewModel:", viewModel);
+                        // Access properties directly from viewModelInstance
+                        if ((vmi as any).properties) {
+                            console.log("Found properties on viewModelInstance:", (vmi as any).properties);
 
-                        if (viewModel?.properties) {
-                            console.log("Found viewModel.properties:", viewModel.properties);
+                            (vmi as any).properties.forEach((prop: any) => {
+                                const propertyName = prop.name;
+                                console.log(`Trying property from instance: ${propertyName}`);
 
-                            // Iterate through property descriptors to discover by type
-                            viewModel.properties.forEach((propertyDescriptor: any) => {
-                                const propertyName = propertyDescriptor.name;
-                                const propertyType = propertyDescriptor.type;
+                                // Try each accessor type
+                                const accessors = [
+                                    { fn: 'number', type: 'number' as const },
+                                    { fn: 'string', type: 'string' as const },
+                                    { fn: 'boolean', type: 'boolean' as const },
+                                    { fn: 'color', type: 'color' as const },
+                                    { fn: 'trigger', type: 'trigger' as const },
+                                    { fn: 'enum', type: 'enum' as const },
+                                    { fn: 'list', type: 'list' as const },
+                                    { fn: 'image', type: 'image' as const },
+                                ];
 
-                                console.log(`Discovering property: ${propertyName} (type: ${propertyType})`);
+                                for (const accessor of accessors) {
+                                    try {
+                                        const binding = (vmi as any)[accessor.fn]?.(propertyName);
+                                        if (binding && (binding.value !== undefined || accessor.type === 'trigger' || accessor.type === 'list')) {
+                                            let currentValue = null;
+                                            try {
+                                                if (accessor.type === 'trigger') {
+                                                    currentValue = null;
+                                                } else if (accessor.type === 'list') {
+                                                    currentValue = `List (${binding.length || 0} items)`;
+                                                } else {
+                                                    currentValue = binding.value;
+                                                }
+                                            } catch { }
 
-                                try {
-                                    let binding: any = null;
-                                    let discoveredType: DiscoveredDataBinding['type'] = 'unknown';
-                                    let currentValue: any = null;
-
-                                    // Map Rive property types to our discovery types and access accordingly
-                                    switch (propertyType) {
-                                        case 0: // Number
-                                            binding = vmi.number(propertyName);
-                                            discoveredType = 'number';
+                                            console.log(`✓ Found ${propertyName} as ${accessor.type}:`, currentValue);
+                                            dataBindings.push({
+                                                name: propertyName,
+                                                type: accessor.type,
+                                                currentValue: currentValue,
+                                                ref: binding
+                                            });
                                             break;
-                                        case 1: // String  
-                                            binding = vmi.string(propertyName);
-                                            discoveredType = 'string';
-                                            break;
-                                        case 2: // Boolean
-                                            binding = vmi.boolean(propertyName);
-                                            discoveredType = 'boolean';
-                                            break;
-                                        case 3: // Color
-                                            binding = vmi.color(propertyName);
-                                            discoveredType = 'color';
-                                            break;
-                                        case 4: // Trigger
-                                            binding = vmi.trigger(propertyName);
-                                            discoveredType = 'trigger';
-                                            break;
-                                        case 5: // Enum
-                                            binding = vmi.enum(propertyName);
-                                            discoveredType = 'enum';
-                                            break;
-                                        case 6: // List
-                                            binding = vmi.list(propertyName);
-                                            discoveredType = 'list';
-                                            break;
-                                        case 7: // Image
-                                            binding = vmi.image(propertyName);
-                                            discoveredType = 'image';
-                                            break;
-                                        default:
-                                            console.warn(`Unknown property type: ${propertyType} for ${propertyName}`);
-                                            // Try to access anyway
-                                            const accessors = [
-                                                { fn: 'number', type: 'number' as const },
-                                                { fn: 'string', type: 'string' as const },
-                                                { fn: 'boolean', type: 'boolean' as const },
-                                                { fn: 'color', type: 'color' as const },
-                                                { fn: 'trigger', type: 'trigger' as const },
-                                                { fn: 'enum', type: 'enum' as const },
-                                                { fn: 'list', type: 'list' as const },
-                                                { fn: 'image', type: 'image' as const },
-                                            ];
-
-                                            for (const accessor of accessors) {
-                                                try {
-                                                    const testBinding = (vmi as any)[accessor.fn]?.(propertyName);
-                                                    if (testBinding) {
-                                                        binding = testBinding;
-                                                        discoveredType = accessor.type;
-                                                        break;
-                                                    }
-                                                } catch { }
-                                            }
-                                    }
-
-                                    if (binding) {
-                                        // Get current value if available
-                                        try {
-                                            if (discoveredType === 'trigger') {
-                                                currentValue = null; // Triggers don't have values
-                                            } else if (discoveredType === 'list') {
-                                                currentValue = `List (${binding.length || 0} items)`;
-                                            } else {
-                                                currentValue = binding.value;
-                                            }
-                                        } catch {
-                                            currentValue = null;
                                         }
-
-                                        console.log(`✓ Successfully discovered ${propertyName} as ${discoveredType}:`, currentValue);
-                                        dataBindings.push({
-                                            name: propertyName,
-                                            type: discoveredType,
-                                            currentValue: currentValue,
-                                            ref: binding
-                                        });
-                                    } else {
-                                        console.warn(`✗ Could not access property: ${propertyName} (type: ${propertyType})`);
-                                    }
-                                } catch (error) {
-                                    console.error(`Error accessing property ${propertyName}:`, error);
+                                    } catch { }
                                 }
                             });
                         } else {
-                            // Fallback: If no property descriptors, try accessing the viewModelInstance directly
-                            console.log("No viewModel.properties found, checking viewModelInstance.properties...");
-
-                            if ((vmi as any).properties) {
-                                console.log("Found properties on viewModelInstance:", (vmi as any).properties);
-
-                                (vmi as any).properties.forEach((prop: any) => {
-                                    const propertyName = prop.name;
-                                    console.log(`Trying property from instance: ${propertyName}`);
-
-                                    // Try each accessor type
-                                    const accessors = [
-                                        { fn: 'number', type: 'number' as const },
-                                        { fn: 'string', type: 'string' as const },
-                                        { fn: 'boolean', type: 'boolean' as const },
-                                        { fn: 'color', type: 'color' as const },
-                                        { fn: 'trigger', type: 'trigger' as const },
-                                        { fn: 'enum', type: 'enum' as const },
-                                        { fn: 'list', type: 'list' as const },
-                                        { fn: 'image', type: 'image' as const },
-                                    ];
-
-                                    for (const accessor of accessors) {
-                                        try {
-                                            const binding = (vmi as any)[accessor.fn]?.(propertyName);
-                                            if (binding && (binding.value !== undefined || accessor.type === 'trigger' || accessor.type === 'list')) {
-                                                let currentValue = null;
-                                                try {
-                                                    if (accessor.type === 'trigger') {
-                                                        currentValue = null;
-                                                    } else if (accessor.type === 'list') {
-                                                        currentValue = `List (${binding.length || 0} items)`;
-                                                    } else {
-                                                        currentValue = binding.value;
-                                                    }
-                                                } catch { }
-
-                                                console.log(`✓ Found ${propertyName} as ${accessor.type}:`, currentValue);
-                                                dataBindings.push({
-                                                    name: propertyName,
-                                                    type: accessor.type,
-                                                    currentValue: currentValue,
-                                                    ref: binding
-                                                });
-                                                break;
-                                            }
-                                        } catch { }
-                                    }
-                                });
-                            }
+                            console.log("No properties found on viewModelInstance - no data bindings exist");
                         }
                     } else {
                         console.log("No viewModelInstance found - autoBind may be disabled or no data bindings exist");
