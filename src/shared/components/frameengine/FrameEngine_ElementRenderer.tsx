@@ -44,6 +44,7 @@ export interface BaseElement {
     position: ElementPosition;
     properties: Record<string, any>;
     visible?: boolean;
+    locked?: boolean;
 }
 
 export interface RendererConfig {
@@ -236,9 +237,26 @@ export const FrameEngine_ElementRenderer: React.FC<ElementRendererProps> = ({
 
     const getElementStyles = useCallback((element: BaseElement, isSelected: boolean): React.CSSProperties => {
         const props = element.properties;
+        const isLocked = element.locked ?? false;
         const isVisualEffect = element.type === 'ecg' || element.type === 'clock' ||
             element.type === 'oscilloscope' || element.type === 'tunnel' || element.type === 'weather' ||
             element.type === 'asset-image' || element.type === 'asset-video' || element.type === 'asset-rive';
+
+        // Determine outline - locked elements only show outline when selected
+        let outlineStyle = 'none';
+        let boxShadowStyle = 'none';
+
+        if (config.isInteractive && !isLocked) {
+            // Unlocked elements: show normal outline behavior
+            const outlineColor = isSelected ? '#1976d2' : '#ccc';
+            outlineStyle = `${isSelected ? '2px' : '1px'} solid ${outlineColor}`;
+            boxShadowStyle = isSelected ? '0 0 0 2px rgba(25, 118, 210, 0.3)' : 'none';
+        } else if (config.isInteractive && isLocked && isSelected) {
+            // Locked + selected (from element list): show orange outline
+            outlineStyle = '2px solid #ff9800';
+            boxShadowStyle = '0 0 0 2px rgba(255, 152, 0, 0.3)';
+        }
+        // Locked but not selected: no outline at all
 
         return {
             position: 'absolute',
@@ -246,13 +264,14 @@ export const FrameEngine_ElementRenderer: React.FC<ElementRendererProps> = ({
             top: element.position.y,
             width: element.position.width,
             height: element.position.height,
-            outline: config.isInteractive ? (isSelected ? '2px solid #1976d2' : '1px solid #ccc') : 'none',
-            cursor: config.isInteractive ? 'move' : 'default',
-            boxShadow: (config.isInteractive && isSelected) ? '0 0 0 2px rgba(25, 118, 210, 0.3)' : 'none',
+            outline: outlineStyle,
+            cursor: config.isInteractive ? (isLocked ? 'default' : 'move') : 'default',
+            boxShadow: boxShadowStyle,
             zIndex: 2,
             overflow: 'hidden',
             boxSizing: 'border-box',
             backgroundColor: isVisualEffect ? 'transparent' : (props.backgroundColor || 'transparent'),
+            pointerEvents: isLocked ? 'none' : 'auto', // Make locked elements non-interactive
         };
     }, [config.isInteractive]);
 
@@ -420,7 +439,6 @@ export const FrameEngine_ElementRenderer: React.FC<ElementRendererProps> = ({
                 const data = getSensorData(tunnelElement);
                 const sensorValue = data?.value != null ? parseFloat(data.value) : undefined;
 
-                // Determine which renderer to use based on renderMode property
                 const renderMode = element.properties.renderMode || '2d';
 
                 if (renderMode === '3d') {
