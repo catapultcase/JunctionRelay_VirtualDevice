@@ -138,8 +138,8 @@ function createWindow() {
   console.log('Creating window...');
   
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 700,
+    width: 720,
+    height: 560,
     resizable: false,
     autoHideMenuBar: true,
     webPreferences: {

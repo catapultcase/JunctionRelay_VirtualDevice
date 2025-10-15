@@ -24,10 +24,6 @@
       flex-direction: column;
       gap: 16px;
     }
-    h1 {
-      margin: 0;
-      font-size: 32px;
-    }
     h3 {
       margin: 0 0 12px;
       font-size: 20px;
@@ -73,11 +69,6 @@
     select:focus {
       outline: none;
       border-color: #007acc;
-    }
-    hr {
-      margin: 12px 0;
-      border: none;
-      border-top: 1px solid #333;
     }
     .button-group {
       display: flex;
@@ -138,24 +129,24 @@
     }
     .position-selector {
       display: grid;
-      grid-template-columns: repeat(3, 50px);
-      grid-template-rows: repeat(3, 50px);
-      gap: 4px;
+      grid-template-columns: repeat(3, 40px);
+      grid-template-rows: repeat(3, 40px);
+      gap: 3px;
       margin-top: 8px;
     }
     .position-btn {
-      width: 50px;
-      height: 50px;
+      width: 40px;
+      height: 40px;
       padding: 0;
       background: #333;
       border: 2px solid #555;
-      border-radius: 6px;
+      border-radius: 4px;
       cursor: pointer;
       transition: all 0.2s;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 11px;
+      font-size: 10px;
       color: #9aa0a6;
     }
     .position-btn:hover {
@@ -222,21 +213,7 @@
 </head>
 <body>
   <div id="root">
-    <header>
-      <h1>JunctionRelay</h1>
-      <p>Virtual device with WebSocket server and Rive visualization.</p>
-    </header>
-
     <main style="flex: 1; overflow: hidden;">
-      <section>
-        <div class="button-group">
-          <button onclick="app.openLocalServer()">Local Server</button>
-          <button onclick="app.openCloudDashboard()">Cloud Dashboard</button>
-        </div>
-      </section>
-
-      <hr>
-
       <section>
         <h3>JunctionRelay Virtual Device</h3>
         <div class="button-group">
@@ -244,6 +221,7 @@
           <button id="mode-btn" class="active" onclick="app.toggleMode()">Fullscreen</button>
           <button id="viewport-btn" onclick="app.toggleViewport()">Open ViewPort</button>
         </div>
+        <p id="ws-ips" style="color: #6c9bcf; margin: 12px 0 0; font-size: 14px; display: none;"></p>
 
         <div class="settings-card">
           <div class="settings-title">Settings</div>
@@ -358,7 +336,7 @@
           modeBtn.textContent = this.fullscreenMode ? 'Fullscreen' : 'Windowed';
           modeBtn.className = this.fullscreenMode ? 'active' : '';
 
-          // Update header with IPs
+          // Update WebSocket IPs
           this.updateHeader();
 
           console.log('✅ Preferences loaded');
@@ -448,16 +426,14 @@
       },
 
       updateHeader() {
-        const header = document.querySelector('header p:last-child');
-        if (header) header.remove();
+        const ipText = document.getElementById('ws-ips');
+        if (!ipText) return;
         
         if (this.localIps.length > 0) {
-          const ipText = document.createElement('p');
-          ipText.style.color = '#6c9bcf';
-          ipText.style.margin = '6px 0 0';
-          ipText.style.fontSize = '14px';
           ipText.textContent = `WebSocket Server: ${this.localIps.map(ip => `${ip}:8081`).join(', ')}`;
-          document.querySelector('header').appendChild(ipText);
+          ipText.style.display = 'block';
+        } else {
+          ipText.style.display = 'none';
         }
       },
 
@@ -495,19 +471,6 @@
         document.body.appendChild(toast);
 
         setTimeout(() => toast.remove(), 2800);
-      },
-
-      openLocalServer() {
-        const url = prompt('Enter JunctionRelay Local Server URL:', 'http://10.168.1.90:7180/');
-        if (url) {
-          ipcRenderer.send('open-external', url);
-          this.showToast('Opening URL...');
-        }
-      },
-
-      openCloudDashboard() {
-        ipcRenderer.send('open-external', 'https://dashboard.junctionrelay.com');
-        this.showToast('Opening JunctionRelay Cloud...');
       },
 
       toggleWebSocket() {
