@@ -24,6 +24,9 @@ import { FrameEngine_OscilloscopeElement } from '../frameengine_effects/FrameEng
 import { FrameEngine_TunnelElement } from '../frameengine_effects/FrameEngine_TunnelElement';
 import { FrameEngine_TunnelElementWebGL } from '../frameengine_effects/FrameEngine_TunnelElementWebGL';
 import { FrameEngine_WeatherElement } from '../frameengine_effects/FrameEngine_WeatherElement';
+import { FrameEngine_Asset_Image } from '../frameengine_effects/FrameEngine_Asset_Image';
+import { FrameEngine_Asset_Video } from '../frameengine_effects/FrameEngine_Asset_Video';
+import { FrameEngine_Asset_Rive } from '../frameengine_effects/FrameEngine_Asset_Rive';
 
 const loadedFonts = new Set<string>();
 
@@ -121,6 +124,45 @@ export interface WeatherElement extends BaseElement {
     };
 }
 
+export interface AssetImageElement extends BaseElement {
+    type: 'asset-image';
+    properties: {
+        assetImageUrl?: string;
+        imageFit?: 'cover' | 'contain' | 'fill' | 'tile' | 'stretch' | 'none';
+        opacity?: number;
+        visibilitySensorTag?: string;
+        [key: string]: any;
+    };
+}
+
+export interface AssetVideoElement extends BaseElement {
+    type: 'asset-video';
+    properties: {
+        assetVideoUrl?: string;
+        videoFit?: 'cover' | 'contain' | 'fill' | 'stretch' | 'none';
+        videoLoop?: boolean;
+        videoMuted?: boolean;
+        videoAutoplay?: boolean;
+        opacity?: number;
+        visibilitySensorTag?: string;
+        [key: string]: any;
+    };
+}
+
+export interface AssetRiveElement extends BaseElement {
+    type: 'asset-rive';
+    properties: {
+        assetRiveFile?: string;
+        riveStateMachine?: string;
+        riveInputs?: Record<string, any>;
+        riveBindings?: Record<string, any>;
+        riveFit?: 'cover' | 'contain' | 'none';
+        opacity?: number;
+        visibilitySensorTag?: string;
+        [key: string]: any;
+    };
+}
+
 interface ElementRendererProps {
     elements: BaseElement[];
     config: RendererConfig;
@@ -195,7 +237,8 @@ export const FrameEngine_ElementRenderer: React.FC<ElementRendererProps> = ({
     const getElementStyles = useCallback((element: BaseElement, isSelected: boolean): React.CSSProperties => {
         const props = element.properties;
         const isVisualEffect = element.type === 'ecg' || element.type === 'clock' ||
-            element.type === 'oscilloscope' || element.type === 'tunnel' || element.type === 'weather';
+            element.type === 'oscilloscope' || element.type === 'tunnel' || element.type === 'weather' ||
+            element.type === 'asset-image' || element.type === 'asset-video' || element.type === 'asset-rive';
 
         return {
             position: 'absolute',
@@ -487,6 +530,51 @@ export const FrameEngine_ElementRenderer: React.FC<ElementRendererProps> = ({
                 );
             }
 
+            case 'asset-image': {
+                const assetImageElement = element as AssetImageElement;
+                return (
+                    <FrameEngine_Asset_Image
+                        assetImageUrl={element.properties.assetImageUrl}
+                        imageFit={element.properties.imageFit || 'cover'}
+                        opacity={element.properties.opacity ?? 1}
+                        width={element.position.width}
+                        height={element.position.height}
+                    />
+                );
+            }
+
+            case 'asset-video': {
+                const assetVideoElement = element as AssetVideoElement;
+                return (
+                    <FrameEngine_Asset_Video
+                        assetVideoUrl={element.properties.assetVideoUrl}
+                        videoFit={element.properties.videoFit || 'cover'}
+                        videoLoop={element.properties.videoLoop ?? true}
+                        videoMuted={element.properties.videoMuted ?? true}
+                        videoAutoplay={element.properties.videoAutoplay ?? true}
+                        opacity={element.properties.opacity ?? 1}
+                        width={element.position.width}
+                        height={element.position.height}
+                    />
+                );
+            }
+
+            case 'asset-rive': {
+                const assetRiveElement = element as AssetRiveElement;
+                return (
+                    <FrameEngine_Asset_Rive
+                        assetRiveFile={element.properties.assetRiveFile}
+                        riveStateMachine={element.properties.riveStateMachine}
+                        riveInputs={element.properties.riveInputs}
+                        riveBindings={element.properties.riveBindings}
+                        riveFit={element.properties.riveFit || 'cover'}
+                        opacity={element.properties.opacity ?? 1}
+                        width={element.position.width}
+                        height={element.position.height}
+                    />
+                );
+            }
+
             case 'sensor': {
                 const sensorElement = element as SensorElement;
                 const data = getSensorData(sensorElement);
@@ -661,6 +749,7 @@ export const FrameEngine_ElementRenderer: React.FC<ElementRendererProps> = ({
         getElementStyles,
         renderElementContent,
         config.isInteractive,
+        config.enableSensorVisibility,
         onElementMouseDown,
         onElementMouseEnter,
         onElementMouseLeave,
