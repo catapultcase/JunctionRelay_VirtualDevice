@@ -644,6 +644,8 @@ export const FrameEngine_Asset_Rive: React.FC<AssetRiveElementProps> = ({
                     border: 'none',
                     outline: 'none',
                     imageRendering: 'crisp-edges',
+                    pointerEvents: 'none',
+                    userSelect: 'none',
                 }}
             />
         </div>

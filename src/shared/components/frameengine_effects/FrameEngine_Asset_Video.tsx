@@ -126,6 +126,8 @@ export const FrameEngine_Asset_Video: React.FC<AssetVideoElementProps> = ({
                     objectFit: getObjectFit(),
                     display: 'block',
                     opacity: opacity,
+                    pointerEvents: 'none',
+                    userSelect: 'none',
                 }}
                 onError={(e) => {
                     // On error, show error placeholder

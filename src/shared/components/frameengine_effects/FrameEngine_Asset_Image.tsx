@@ -116,12 +116,15 @@ export const FrameEngine_Asset_Image: React.FC<AssetImageElementProps> = ({
             <img
                 src={imageUrl}
                 alt="Asset"
+                draggable={false}
                 style={{
                     width: '100%',
                     height: '100%',
                     objectFit: getObjectFit(),
                     display: 'block',
                     opacity: opacity,
+                    pointerEvents: 'none',
+                    userSelect: 'none',
                 }}
                 onError={(e) => {
                     // On error, show error placeholder
