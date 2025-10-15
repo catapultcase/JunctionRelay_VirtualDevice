@@ -93,7 +93,7 @@ export const FrameEngine_Asset_Rive: React.FC<AssetRiveElementProps> = ({
 
         const riveFileUrl = assetRiveFile.startsWith('http')
             ? assetRiveFile
-            : `/api/frameengine/rive-files/${assetRiveFile}/content`;
+            : `/api/frameengine/rive/${assetRiveFile}/content`;
 
         let layoutFit: Fit;
         switch (riveFit) {
