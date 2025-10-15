@@ -84,7 +84,7 @@ export const FrameEngine_Asset_Video: React.FC<AssetVideoElementProps> = ({
     // Build the video URL
     const videoUrl = assetVideoUrl.startsWith('http')
         ? assetVideoUrl
-        : `/api/frameengine/background-videos/${assetVideoUrl}/content`;
+        : `/api/frameengine/videos/${assetVideoUrl}/content`;
 
     // Get CSS object-fit value
     const getObjectFit = (): React.CSSProperties['objectFit'] => {

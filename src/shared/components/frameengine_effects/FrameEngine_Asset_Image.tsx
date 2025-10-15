@@ -67,7 +67,7 @@ export const FrameEngine_Asset_Image: React.FC<AssetImageElementProps> = ({
     // Build the image URL
     const imageUrl = assetImageUrl.startsWith('http')
         ? assetImageUrl
-        : `/api/frameengine/background-images/${assetImageUrl}/content`;
+        : `/api/frameengine/images/${assetImageUrl}/content`;
 
     // Handle tile mode separately with background-image
     if (imageFit === 'tile') {

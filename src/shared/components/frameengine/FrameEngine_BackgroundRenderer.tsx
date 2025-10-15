@@ -104,7 +104,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
 
         const riveFileUrl = config.riveFile.startsWith('http')
             ? config.riveFile
-            : `/api/frameengine/rive-files/${config.riveFile}/content`;
+            : `/api/frameengine/rive/${config.riveFile}/content`;
 
         let layoutFit: Fit;
         switch (fit) {
@@ -640,7 +640,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
                 const imageUrl = config.imageUrl
                     ? (config.imageUrl.startsWith('http')
                         ? config.imageUrl
-                        : `/api/frameengine/background-images/${config.imageUrl}/content`)
+                        : `/api/frameengine/images/${config.imageUrl}/content`)
                     : undefined;
 
                 // Handle tile mode separately
@@ -692,7 +692,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
 
                 const videoUrl = config.videoUrl.startsWith('http')
                     ? config.videoUrl
-                    : `/api/frameengine/background-videos/${config.videoUrl}/content`;
+                    : `/api/frameengine/videos/${config.videoUrl}/content`;
 
                 return (
                     <video
