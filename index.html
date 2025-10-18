@@ -70,45 +70,134 @@
       outline: none;
       border-color: #007acc;
     }
+    select:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: #2a2a2a;
+    }
+    input[type="number"] {
+      padding: 10px 14px;
+      background: #333;
+      color: white;
+      border: 1px solid #555;
+      border-radius: 4px;
+      font-size: 14px;
+      width: 100px;
+    }
+    input[type="number"]:hover:not(:disabled) {
+      background: #444;
+    }
+    input[type="number"]:focus {
+      outline: none;
+      border-color: #007acc;
+    }
+    input[type="number"]:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: #2a2a2a;
+    }
     .button-group {
       display: flex;
       gap: 12px;
       flex-wrap: wrap;
       align-items: center;
     }
+    .connection-status {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .connection-status button {
+      margin-left: auto;
+      white-space: nowrap;
+    }
+    .connection-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #666;
+    }
+    .connection-indicator.active {
+      background: #28a745;
+      box-shadow: 0 0 8px #28a745;
+    }
+    .connection-info {
+      flex: 1;
+    }
+    .connection-mode {
+      font-size: 13px;
+      color: #9aa0a6;
+      margin-bottom: 2px;
+    }
+    .connection-address {
+      font-size: 14px;
+      color: #6c9bcf;
+      font-weight: 500;
+    }
     .settings-card {
       background: #1a1a1a;
       border: 1px solid #333;
       border-radius: 8px;
-      padding: 16px;
+      padding: 0;
       margin-top: 12px;
+      overflow: hidden;
     }
-    .settings-title {
-      font-size: 16px;
-      font-weight: 600;
+    .tabs-header {
+      display: flex;
+      border-bottom: 1px solid #333;
+      background: #151515;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 12px 16px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: #9aa0a6;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover {
+      background: #1a1a1a;
       color: #eaeaea;
-      margin-bottom: 12px;
+    }
+    .tab-btn.active {
+      color: #007acc;
+      border-bottom-color: #007acc;
+      background: #1a1a1a;
+    }
+    .tab-content {
+      padding: 16px;
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .tab-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .tab-col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .tab-col:first-child {
+      padding-right: 16px;
+      border-right: 1px solid #333;
     }
     .checkbox-group {
       display: flex;
       flex-direction: column;
       gap: 8px;
-      margin-top: 8px;
-    }
-    .checkbox-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-top: 8px;
-    }
-    .checkbox-col {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .checkbox-col:first-child {
-      padding-right: 16px;
-      border-right: 1px solid #333;
     }
     label {
       display: flex;
@@ -121,7 +210,11 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
-      margin-top: 8px;
+    }
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
     .select-label {
       font-size: 14px;
@@ -183,14 +276,6 @@
     #devtools-btn:hover {
       background: #666;
     }
-    #version {
-      position: fixed;
-      bottom: 20px;
-      left: 20px;
-      font-size: 12px;
-      color: #9aa0a6;
-      z-index: 1000;
-    }
     .toast {
       position: fixed;
       bottom: 20px;
@@ -209,65 +294,156 @@
     .toast.error {
       background: #c0392b;
     }
+    .retry-fields {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    .retry-fields.hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
   <div id="root">
-    <main style="flex: 1; overflow: hidden;">
+    <main style="flex: 1; overflow-y: auto; overflow-x: hidden;">
       <section>
-        <h3>JunctionRelay Virtual Device</h3>
+        <h3>JunctionRelay Virtual Device <span id="version-header" style="font-size: 14px; color: #9aa0a6; font-weight: normal;"></span></h3>
         <div class="button-group">
-          <button id="ws-btn" onclick="app.toggleWebSocket()">Start WebSocket Server</button>
           <button id="mode-btn" class="active" onclick="app.toggleMode()">Fullscreen</button>
           <button id="viewport-btn" onclick="app.toggleViewport()">Open ViewPort</button>
         </div>
-        <p id="ws-ips" style="color: #6c9bcf; margin: 12px 0 0; font-size: 14px; display: none;"></p>
+
+        <div class="connection-status">
+          <div id="connection-indicator" class="connection-indicator"></div>
+          <div class="connection-info">
+            <div class="connection-mode" id="connection-mode">WebSocket</div>
+            <div class="connection-address" id="connection-address">Not connected</div>
+          </div>
+          <button id="ws-btn" onclick="app.toggleWebSocket()">Start WebSocket Server</button>
+        </div>
 
         <div class="settings-card">
-          <div class="settings-title">Settings</div>
-          <div class="checkbox-grid">
-          <div class="checkbox-col">
-            <div class="select-group" style="margin-top: 0;">
-              <span class="select-label">Display Monitor:</span>
-              <select id="monitor-select">
-                <option value="0">Loading displays...</option>
-              </select>
-            </div>
-            <label>
-              <input type="checkbox" id="hide-cursor" checked>
-              <span>Hide cursor in fullscreen mode</span>
-            </label>
-            <label>
-              <input type="checkbox" id="auto-start">
-              <span>Auto-start WebSocket server on launch</span>
-            </label>
-            <label>
-              <input type="checkbox" id="auto-open-viz">
-              <span>Auto-open visualization on stream detection</span>
-            </label>
-            <label>
-              <input type="checkbox" id="start-minimized">
-              <span>Start with main window minimized to tray</span>
-            </label>
+          <div class="tabs-header">
+            <button class="tab-btn active" onclick="app.switchTab('options')">Options</button>
+            <button class="tab-btn" onclick="app.switchTab('connection')">Connection</button>
+            <button class="tab-btn" onclick="app.switchTab('displays')">Displays</button>
           </div>
 
-          <div class="checkbox-col">
-            <label>
-              <input type="checkbox" id="show-fps">
-              <span>Show FPS overlay in visualization</span>
-            </label>
-            <div class="select-group" style="margin-top: 0;">
-              <span class="select-label">FPS Counter Position:</span>
-              <div class="position-selector">
-                <button class="position-btn active" data-position="top-left" onclick="app.setFpsPosition('top-left')">TL</button>
-                <button class="position-btn disabled"></button>
-                <button class="position-btn" data-position="top-right" onclick="app.setFpsPosition('top-right')">TR</button>
-                <button class="position-btn disabled"></button>
-                <button class="position-btn" data-position="center" onclick="app.setFpsPosition('center')">C</button>
-                <button class="position-btn disabled"></button>
-                <button class="position-btn" data-position="bottom-left" onclick="app.setFpsPosition('bottom-left')">BL</button>
-                <button class="position-btn disabled"></button>
-                <button class="position-btn" data-position="bottom-right" onclick="app.setFpsPosition('bottom-right')">BR</button>
+          <!-- Options Tab -->
+          <div id="tab-options" class="tab-content active">
+            <div class="tab-grid">
+              <div class="tab-col">
+                <div class="checkbox-group">
+                  <label>
+                    <input type="checkbox" id="hide-cursor" checked>
+                    <span>Hide cursor in fullscreen mode</span>
+                  </label>
+                  <label>
+                    <input type="checkbox" id="auto-open-viz">
+                    <span>Auto-open visualization on stream detection</span>
+                  </label>
+                  <label>
+                    <input type="checkbox" id="start-minimized">
+                    <span>Start with main window minimized to tray</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="tab-col">
+                <div class="checkbox-group">
+                  <label>
+                    <input type="checkbox" id="show-fps">
+                    <span>Show FPS overlay in visualization</span>
+                  </label>
+                </div>
+                <div class="select-group">
+                  <span class="select-label">FPS Counter Position:</span>
+                  <div class="position-selector">
+                    <button class="position-btn active" data-position="top-left" onclick="app.setFpsPosition('top-left')">TL</button>
+                    <button class="position-btn disabled"></button>
+                    <button class="position-btn" data-position="top-right" onclick="app.setFpsPosition('top-right')">TR</button>
+                    <button class="position-btn disabled"></button>
+                    <button class="position-btn" data-position="center" onclick="app.setFpsPosition('center')">C</button>
+                    <button class="position-btn disabled"></button>
+                    <button class="position-btn" data-position="bottom-left" onclick="app.setFpsPosition('bottom-left')">BL</button>
+                    <button class="position-btn disabled"></button>
+                    <button class="position-btn" data-position="bottom-right" onclick="app.setFpsPosition('bottom-right')">BR</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Connection Tab -->
+          <div id="tab-connection" class="tab-content">
+            <div class="tab-grid">
+              <div class="tab-col">
+                <div class="select-group">
+                  <span class="select-label">Connection Mode:</span>
+                  <select id="connection-mode-select">
+                    <option value="websocket">WebSocket</option>
+                  </select>
+                </div>
+
+                <div class="input-group">
+                  <span class="select-label">WebSocket Port:</span>
+                  <input type="number" id="ws-port" min="1024" max="65535" step="1" value="8081" style="width: 150px;">
+                  <p style="font-size: 12px; color: #9aa0a6; margin-top: 4px;">Port changes require restarting the WebSocket server</p>
+                </div>
+              </div>
+
+              <div class="tab-col">
+                <div class="checkbox-group">
+                  <label>
+                    <input type="checkbox" id="auto-start">
+                    <span>Auto-start WebSocket server on launch</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Displays Tab -->
+          <div id="tab-displays" class="tab-content">
+            <div class="tab-grid">
+              <div class="tab-col">
+                <div class="select-group">
+                  <span class="select-label">Display Monitor:</span>
+                  <select id="monitor-select">
+                    <option value="0">Loading displays...</option>
+                  </select>
+                </div>
+
+                <div class="select-group">
+                  <span class="select-label">Multi-Monitor Behavior:</span>
+                  <select id="monitor-behavior-select">
+                    <option value="wait">Wait for set display</option>
+                    <option value="fallback">Fallback to primary if set display is undetected</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="tab-col">
+                <div id="retry-fields-container" class="input-group">
+                  <span class="select-label">Retry Settings:</span>
+                  <div class="retry-fields">
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                      <label style="font-size: 12px; color: #9aa0a6;">Interval (seconds)</label>
+                      <input type="number" id="retry-interval" min="0.5" max="10" step="0.5" value="1">
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                      <label style="font-size: 12px; color: #9aa0a6;">Max Retries</label>
+                      <input type="number" id="max-retries" min="0" max="30" step="1" value="5">
+                    </div>
+                  </div>
+                  <div style="margin-top: 8px;">
+                    <span style="font-size: 12px; color: #9aa0a6;">Total Wait Time: </span>
+                    <span id="total-wait" style="font-size: 14px; color: #007acc; font-weight: 500;">~5.0s</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -277,7 +453,6 @@
 
     <button id="devtools-btn" onclick="app.toggleDevTools()">DevTools</button>
     <button id="quit-btn" class="danger" onclick="app.quit()">Quit</button>
-    <div id="version"></div>
   </div>
 
   <script>
@@ -291,11 +466,16 @@
       displays: [],
       selectedDisplayId: 0,
       fpsPosition: 'top-left',
+      currentTab: 'options',
+      retryInterval: 1,
+      maxRetries: 5,
+      wsPort: 8081,
+      monitorBehavior: 'wait',
 
       async init() {
         // Load preferences and displays
         try {
-          const [version, fullscreen, hideCursor, autoStart, autoOpenViz, showFps, ips, displays, savedDisplayId, fpsPosition, startMinimized] = await Promise.all([
+          const [version, fullscreen, hideCursor, autoStart, autoOpenViz, showFps, ips, displays, savedDisplayId, fpsPosition, startMinimized, retryInterval, maxRetries, wsPort, monitorBehavior] = await Promise.all([
             ipcRenderer.invoke('get-app-version'),
             ipcRenderer.invoke('get-fullscreen-preference'),
             ipcRenderer.invoke('get-hide-cursor-preference'),
@@ -306,23 +486,36 @@
             ipcRenderer.invoke('get-displays'),
             ipcRenderer.invoke('get-display-preference'),
             ipcRenderer.invoke('get-fps-position-preference'),
-            ipcRenderer.invoke('get-start-minimized-preference')
+            ipcRenderer.invoke('get-start-minimized-preference'),
+            ipcRenderer.invoke('get-retry-interval-preference'),
+            ipcRenderer.invoke('get-max-retries-preference'),
+            ipcRenderer.invoke('get-ws-port-preference'),
+            ipcRenderer.invoke('get-monitor-behavior-preference')
           ]);
 
           // Set version
           if (version) {
-            document.getElementById('version').textContent = `v${version}`;
+            document.getElementById('version-header').textContent = `v${version}`;
           }
 
           // Set preferences
           this.fullscreenMode = fullscreen;
           this.localIps = ips || [];
           this.fpsPosition = fpsPosition || 'top-left';
+          this.retryInterval = retryInterval ?? 1;
+          this.maxRetries = maxRetries ?? 5;
+          this.wsPort = wsPort ?? 8081;
+          this.monitorBehavior = monitorBehavior ?? 'wait';
+          
           document.getElementById('hide-cursor').checked = hideCursor;
           document.getElementById('auto-start').checked = autoStart;
           document.getElementById('auto-open-viz').checked = autoOpenViz;
           document.getElementById('show-fps').checked = showFps;
           document.getElementById('start-minimized').checked = startMinimized;
+          document.getElementById('retry-interval').value = this.retryInterval;
+          document.getElementById('max-retries').value = this.maxRetries;
+          document.getElementById('ws-port').value = this.wsPort;
+          document.getElementById('monitor-behavior-select').value = this.monitorBehavior;
 
           // Setup displays
           this.displays = displays || [];
@@ -330,14 +523,20 @@
 
           // Update position selector
           this.updatePositionSelector();
+          
+          // Update total wait time
+          this.updateTotalWaitTime();
+
+          // Update retry fields visibility
+          this.updateRetryFieldsVisibility();
 
           // Update mode button
           const modeBtn = document.getElementById('mode-btn');
           modeBtn.textContent = this.fullscreenMode ? 'Fullscreen' : 'Windowed';
           modeBtn.className = this.fullscreenMode ? 'active' : '';
 
-          // Update WebSocket IPs
-          this.updateHeader();
+          // Update connection status
+          this.updateConnectionStatus();
 
           console.log('✅ Preferences loaded');
         } catch (err) {
@@ -351,9 +550,13 @@
             const btn = document.getElementById('ws-btn');
             btn.textContent = this.wsRunning ? 'Stop WebSocket Server' : 'Start WebSocket Server';
             
+            // Update port field disabled state
+            const portField = document.getElementById('ws-port');
+            portField.disabled = this.wsRunning;
+            
             if (data.ips) {
               this.localIps = data.ips;
-              this.updateHeader();
+              this.updateConnectionStatus();
             }
           }
           this.showToast(data.message, data.ok ? 'info' : 'error');
@@ -379,6 +582,43 @@
           this.displays = displays;
           this.populateDisplaySelect(this.selectedDisplayId);
         });
+      },
+
+      switchTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        event.target.classList.add('active');
+
+        // Update tab content
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        document.getElementById(`tab-${tabName}`).classList.add('active');
+
+        this.currentTab = tabName;
+      },
+
+      updateConnectionStatus() {
+        const indicator = document.getElementById('connection-indicator');
+        const modeEl = document.getElementById('connection-mode');
+        const addressEl = document.getElementById('connection-address');
+
+        if (this.wsRunning && this.localIps.length > 0) {
+          indicator.classList.add('active');
+          modeEl.textContent = 'WebSocket';
+          addressEl.textContent = this.localIps.map(ip => `${ip}:${this.wsPort}`).join(', ');
+        } else {
+          indicator.classList.remove('active');
+          modeEl.textContent = 'WebSocket';
+          addressEl.textContent = 'Not connected';
+        }
+      },
+
+      updateRetryFieldsVisibility() {
+        const retryFields = document.getElementById('retry-fields-container');
+        if (this.monitorBehavior === 'wait') {
+          retryFields.style.display = 'flex';
+        } else {
+          retryFields.style.display = 'none';
+        }
       },
 
       populateDisplaySelect(savedDisplayId) {
@@ -425,18 +665,6 @@
         }
       },
 
-      updateHeader() {
-        const ipText = document.getElementById('ws-ips');
-        if (!ipText) return;
-        
-        if (this.localIps.length > 0) {
-          ipText.textContent = `WebSocket Server: ${this.localIps.map(ip => `${ip}:8081`).join(', ')}`;
-          ipText.style.display = 'block';
-        } else {
-          ipText.style.display = 'none';
-        }
-      },
-
       updatePositionSelector() {
         document.querySelectorAll('.position-btn').forEach(btn => {
           btn.classList.remove('active');
@@ -444,6 +672,11 @@
             btn.classList.add('active');
           }
         });
+      },
+
+      updateTotalWaitTime() {
+        const totalWait = this.retryInterval * this.maxRetries;
+        document.getElementById('total-wait').textContent = `~${totalWait.toFixed(1)}s`;
       },
 
       setFpsPosition(position) {
@@ -497,7 +730,10 @@
             hideCursor: document.getElementById('hide-cursor').checked,
             showFps: document.getElementById('show-fps').checked,
             displayId: this.selectedDisplayId,
-            fpsPosition: this.fpsPosition
+            fpsPosition: this.fpsPosition,
+            retryInterval: this.retryInterval,
+            maxRetries: this.maxRetries,
+            monitorBehavior: this.monitorBehavior
           });
         }
       },
@@ -549,6 +785,49 @@
       const selectedDisplay = app.displays.find(d => d.id === displayId);
       const displayName = selectedDisplay ? `Display ${app.displays.indexOf(selectedDisplay) + 1}` : 'selected display';
       app.showToast(`Viewport will open on ${displayName}`);
+    });
+
+    // Monitor behavior handler
+    document.getElementById('monitor-behavior-select').addEventListener('change', (e) => {
+      const value = e.target.value;
+      app.monitorBehavior = value;
+      app.updateRetryFieldsVisibility();
+      ipcRenderer.send('save-monitor-behavior-preference', value);
+      
+      const label = value === 'wait' ? 'Wait for set display' : 'Fallback to primary if set display is undetected';
+      app.showToast(`Multi-monitor behavior: ${label}`);
+    });
+
+    // Retry interval handler
+    document.getElementById('retry-interval').addEventListener('change', (e) => {
+      const value = parseFloat(e.target.value);
+      if (value >= 0.5 && value <= 10) {
+        app.retryInterval = value;
+        app.updateTotalWaitTime();
+        ipcRenderer.send('save-retry-interval-preference', value);
+        app.showToast(`Retry interval: ${value}s`);
+      }
+    });
+
+    // Max retries handler
+    document.getElementById('max-retries').addEventListener('change', (e) => {
+      const value = parseInt(e.target.value);
+      if (value >= 0 && value <= 30) {
+        app.maxRetries = value;
+        app.updateTotalWaitTime();
+        ipcRenderer.send('save-max-retries-preference', value);
+        app.showToast(`Max retries: ${value}`);
+      }
+    });
+
+    // WebSocket port handler
+    document.getElementById('ws-port').addEventListener('change', (e) => {
+      const value = parseInt(e.target.value);
+      if (value >= 1024 && value <= 65535) {
+        app.wsPort = value;
+        ipcRenderer.send('save-ws-port-preference', value);
+        app.showToast(`WebSocket port: ${value} (restart server to apply)`);
+      }
     });
 
     // Initialize app
