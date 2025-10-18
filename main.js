@@ -71,6 +71,27 @@ function getDisplayById(displayId) {
   return displays.find(d => d.id === displayId) || displays[0];
 }
 
+// Helper function to wait for display with retry logic
+async function waitForDisplay(displayId, retryInterval, maxRetries) {
+  console.log(`[Main] Waiting for display ${displayId}, checking every ${retryInterval}s, max ${maxRetries} retries`);
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const display = getDisplayById(displayId);
+    if (display && display.id === displayId) {
+      console.log(`[Main] Display ${displayId} found on attempt ${attempt + 1}`);
+      return display;
+    }
+    
+    if (attempt < maxRetries) {
+      console.log(`[Main] Display ${displayId} not found, waiting ${retryInterval}s... (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, retryInterval * 1000));
+    }
+  }
+  
+  console.log(`[Main] Display ${displayId} not found after ${maxRetries} retries, falling back to primary`);
+  return screen.getPrimaryDisplay();
+}
+
 function createTray() {
   const iconPath = path.join(__dirname, 'icon.png');
   
@@ -103,7 +124,10 @@ function createTray() {
           const hideCursor = prefs.hideCursor ?? true;
           const displayId = prefs.displayId ?? null;
           const fpsPosition = prefs.fpsPosition ?? 'top-left';
-          openVisualizationWindow({ fullscreen, hideCursor, displayId, fpsPosition });
+          const retryInterval = prefs.retryInterval ?? 1;
+          const maxRetries = prefs.maxRetries ?? 5;
+          const monitorBehavior = prefs.monitorBehavior ?? 'wait';
+          openVisualizationWindow({ fullscreen, hideCursor, displayId, fpsPosition, retryInterval, maxRetries, monitorBehavior });
         }
       }
     },
@@ -240,7 +264,10 @@ function forwardMessageToRenderer(doc) {
       const hideCursor = prefs.hideCursor ?? true;
       const displayId = prefs.displayId ?? null;
       const fpsPosition = prefs.fpsPosition ?? 'top-left';
-      openVisualizationWindow({ fullscreen, hideCursor, displayId, fpsPosition });
+      const retryInterval = prefs.retryInterval ?? 1;
+      const maxRetries = prefs.maxRetries ?? 5;
+      const monitorBehavior = prefs.monitorBehavior ?? 'wait';
+      openVisualizationWindow({ fullscreen, hideCursor, displayId, fpsPosition, retryInterval, maxRetries, monitorBehavior });
     } else if (visualizationWindow && !visualizationWindow.isDestroyed()) {
       // Resize existing window if not fullscreen
       resizeVisualizationWindow(doc);
@@ -276,13 +303,21 @@ function forwardMessageToRenderer(doc) {
 }
 
 // Helper function to open visualization window
-function openVisualizationWindow(options) {
+async function openVisualizationWindow(options) {
   if (visualizationWindow && !visualizationWindow.isDestroyed()) {
     visualizationWindow.focus();
     return;
   }
 
-  const { fullscreen = true, hideCursor = true, displayId = null, fpsPosition = 'top-left' } = options || {};
+  const { 
+    fullscreen = true, 
+    hideCursor = true, 
+    displayId = null, 
+    fpsPosition = 'top-left',
+    retryInterval = 1,
+    maxRetries = 5,
+    monitorBehavior = 'wait'
+  } = options || {};
 
   // Get dimensions from cached config if available and not fullscreen
   let windowWidth = 1280;
@@ -294,17 +329,31 @@ function openVisualizationWindow(options) {
     console.log(`[Main] Using canvas dimensions: ${windowWidth}x${windowHeight}`);
   }
 
-  // Get the target display
-  let targetDisplay = displayId !== null ? getDisplayById(displayId) : null;
+  let targetDisplay = null;
+
+  // Handle display selection based on behavior
+  if (displayId !== null && app.isReady()) {
+    if (monitorBehavior === 'wait') {
+      // Wait for display with retry logic
+      targetDisplay = await waitForDisplay(displayId, retryInterval, maxRetries);
+    } else if (monitorBehavior === 'fallback') {
+      // Try to get display, immediately fallback to primary if not found
+      targetDisplay = getDisplayById(displayId);
+      if (!targetDisplay || targetDisplay.id !== displayId) {
+        console.log(`[Main] Display ${displayId} not found, using primary display`);
+        targetDisplay = screen.getPrimaryDisplay();
+      }
+    }
+  }
   
+  // Fallback to primary if still no display
   if (!targetDisplay && app.isReady()) {
     targetDisplay = screen.getPrimaryDisplay();
   }
   
-  // Fallback to primary if display not found
+  // Use default dimensions if screen API not available yet
   if (!targetDisplay) {
     console.log('[Main] Display not found, using default dimensions');
-    // Use default dimensions if screen API not available yet
     const x = 0;
     const y = 0;
     
@@ -461,6 +510,26 @@ ipcMain.handle('get-display-preference', () => {
   return savedDisplayId;
 });
 
+ipcMain.handle('get-retry-interval-preference', () => {
+  const prefs = loadPreferences();
+  return prefs.retryInterval ?? 1;
+});
+
+ipcMain.handle('get-max-retries-preference', () => {
+  const prefs = loadPreferences();
+  return prefs.maxRetries ?? 5;
+});
+
+ipcMain.handle('get-ws-port-preference', () => {
+  const prefs = loadPreferences();
+  return prefs.wsPort ?? 8081;
+});
+
+ipcMain.handle('get-monitor-behavior-preference', () => {
+  const prefs = loadPreferences();
+  return prefs.monitorBehavior ?? 'wait';
+});
+
 ipcMain.handle('get-displays', () => {
   return getDisplays();
 });
@@ -514,6 +583,34 @@ ipcMain.on('save-display-preference', (_event, value) => {
   console.log('[Main] Saved display preference:', value);
 });
 
+ipcMain.on('save-retry-interval-preference', (_event, value) => {
+  const prefs = loadPreferences();
+  prefs.retryInterval = value;
+  savePreferences(prefs);
+  console.log('[Main] Saved retry interval preference:', value);
+});
+
+ipcMain.on('save-max-retries-preference', (_event, value) => {
+  const prefs = loadPreferences();
+  prefs.maxRetries = value;
+  savePreferences(prefs);
+  console.log('[Main] Saved max retries preference:', value);
+});
+
+ipcMain.on('save-ws-port-preference', (_event, value) => {
+  const prefs = loadPreferences();
+  prefs.wsPort = value;
+  savePreferences(prefs);
+  console.log('[Main] Saved WebSocket port preference:', value);
+});
+
+ipcMain.on('save-monitor-behavior-preference', (_event, value) => {
+  const prefs = loadPreferences();
+  prefs.monitorBehavior = value;
+  savePreferences(prefs);
+  console.log('[Main] Saved monitor behavior preference:', value);
+});
+
 ipcMain.on('toggle-devtools', (event) => {
   const window = BrowserWindow.fromWebContents(event.sender);
   if (window) {
@@ -548,7 +645,10 @@ ipcMain.on('start-ws', (event) => {
   }
 
   try {
-    wsServer = new WebSocketServerManager(8081);
+    const prefs = loadPreferences();
+    const wsPort = prefs.wsPort ?? 8081;
+    
+    wsServer = new WebSocketServerManager(wsPort);
     
     // Setup message forwarding
     wsServer.onMessage = forwardMessageToRenderer;
@@ -559,7 +659,7 @@ ipcMain.on('start-ws', (event) => {
       const ips = wsServer.getLocalIPs();
       event.reply('ws-status', { 
         ok: true, 
-        message: `WebSocket server started on port 8081`,
+        message: `WebSocket server started on port ${wsPort}`,
         ips 
       });
     } else {
@@ -664,8 +764,9 @@ app.whenReady().then(() => {
   const prefs = loadPreferences();
   if (prefs.autoStartWs) {
     console.log('[Main] Auto-starting WebSocket server...');
+    const wsPort = prefs.wsPort ?? 8081;
     setTimeout(() => {
-      wsServer = new WebSocketServerManager(8081);
+      wsServer = new WebSocketServerManager(wsPort);
       wsServer.onMessage = forwardMessageToRenderer;
       const started = wsServer.start();
       
@@ -674,7 +775,7 @@ app.whenReady().then(() => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('ws-status', { 
             ok: true, 
-            message: `WebSocket server started on port 8081`,
+            message: `WebSocket server started on port ${wsPort}`,
             ips 
           });
         }
