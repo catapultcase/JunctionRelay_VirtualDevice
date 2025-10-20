@@ -247,7 +247,7 @@ export const VirtualScreenViewerComponent: React.FC<VirtualScreenViewerComponent
                             const g = (hexValue >> 8) & 0xFF;
                             const b = hexValue & 0xFF;
                             newValue = (0xFF << 24) | (r << 16) | (g << 8) | b;
-                            console.log(`Color sensor "${sensorTag}" converted from ${colorValue} to ARGB: ${newValue}`);
+                            // console.log(`Color sensor "${sensorTag}" converted from ${colorValue} to ARGB: ${newValue}`);
                         } else {
                             newValue = Number(colorValue) || 0;
                         }
@@ -258,7 +258,7 @@ export const VirtualScreenViewerComponent: React.FC<VirtualScreenViewerComponent
                     if (oldValue !== newValue) {
                         backgroundBindings.current[sensorTag] = newValue;
                         hasChanges = true;
-                        console.log(`Background binding "${sensorTag}" (${binding.type}) updated: ${oldValue} -> ${newValue}`);
+                        // console.log(`Background binding "${sensorTag}" (${binding.type}) updated: ${oldValue} -> ${newValue}`);
                     }
                 }
             });
@@ -315,10 +315,10 @@ export const VirtualScreenViewerComponent: React.FC<VirtualScreenViewerComponent
             }
         });
 
-        console.log('New sensor data:');
-        Object.entries(sensorPayload.sensors).forEach(([tag, data]: [string, any], index) => {
-            console.log(`  ${index + 1}. "${tag}": ${data.displayValue || `${data.value} ${data.unit || ''}`}`);
-        });
+        // console.log('New sensor data:');
+        // Object.entries(sensorPayload.sensors).forEach(([tag, data]: [string, any], index) => {
+        //     console.log(`  ${index + 1}. "${tag}": ${data.displayValue || `${data.value} ${data.unit || ''}`}`);
+        // });
 
         const allSensorTags = new Set<string>();
 
