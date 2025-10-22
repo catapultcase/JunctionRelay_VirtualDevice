@@ -15,6 +15,7 @@
     "@mui/icons-material": "^7.3.4",
     "@mui/material": "^7.3.4",
     "@rive-app/react-canvas": "^4.23.4",
+    "react-gauge-component": "^1.2.64",
     "three": "^0.180.0",
     "ws": "^8.18.0"
   },
