@@ -112,6 +112,7 @@ export const FrameEngine_Asset_Rive: React.FC<AssetRiveElementProps> = ({
             src: riveFileUrl,
             autoplay: true,
             autoBind: true,
+            useDevicePixelRatio: true,
             layout: new Layout({
                 fit: layoutFit,
                 alignment: Alignment.Center

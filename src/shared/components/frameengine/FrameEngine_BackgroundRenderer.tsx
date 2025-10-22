@@ -123,6 +123,7 @@ export const FrameEngine_BackgroundRenderer: React.FC<FrameEngine_BackgroundRend
             src: riveFileUrl,
             autoplay: true,
             autoBind: true,
+            useDevicePixelRatio: true,
             layout: new Layout({
                 fit: layoutFit,
                 alignment: Alignment.Center

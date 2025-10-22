@@ -688,7 +688,6 @@ export const VirtualScreenViewerComponent: React.FC<VirtualScreenViewerComponent
     if (isEmbedded) {
         // Calculate scale to fit canvas within container height
         const scale = containerHeight / canvasConfig.height;
-        const scaledWidth = canvasConfig.width * scale;
 
         return (
             <Box sx={{
@@ -700,40 +699,20 @@ export const VirtualScreenViewerComponent: React.FC<VirtualScreenViewerComponent
                 overflow: 'hidden',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
             }}>
-                <div style={{
-                    width: canvasConfig.width,
-                    height: canvasConfig.height,
-                    transform: `scale(${scale})`,
-                    transformOrigin: 'center center',
-                    position: 'relative',
-                    backgroundColor: canvasConfig.backgroundColor,
-                    ...brightnessStyle
-                }}>
-                    <FrameEngine_BackgroundRenderer
-                        config={backgroundConfig}
-                        width={canvasConfig.width}
-                        height={canvasConfig.height}
-                        fit="none"
-                        onRiveDiscovery={handleBackgroundDiscovery}
-                    />
-
-                    <div style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: '100%',
-                        zIndex: 1,
-                    }}>
-                        <FrameEngine_ElementRenderer
-                            elements={displayElements}
-                            config={rendererConfig}
-                            sensorData={currentSensorData}
-                        />
-                    </div>
-                </div>
+                <iframe
+                    src={`/device/${deviceId}/virtual-screen`}
+                    style={{
+                        width: canvasConfig.width,
+                        height: canvasConfig.height,
+                        transform: `scale(${scale})`,
+                        transformOrigin: 'center center',
+                        border: 'none',
+                        backgroundColor: canvasConfig.backgroundColor,
+                    }}
+                    title="Virtual Screen Preview"
+                />
 
                 {shouldShowControls && (
                     <Box sx={{
@@ -834,6 +813,7 @@ export const VirtualScreenViewerComponent: React.FC<VirtualScreenViewerComponent
                     width: canvasConfig.width,
                     height: canvasConfig.height,
                     position: 'relative',
+                    zoom: 1 / (window.devicePixelRatio || 1),
                     ...brightnessStyle
                 }}
             >
