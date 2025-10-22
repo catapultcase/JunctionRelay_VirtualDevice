@@ -138,22 +138,16 @@ export const FrameEngine_Asset_Rive: React.FC<AssetRiveElementProps> = ({
     useEffect(() => {
         if (!rive || !assetRiveFile) return;
 
-        console.log(`[ASSET DISCOVERY] Effect triggered - File: ${assetRiveFile}, Previous: ${discoveredFileRef.current}, HasRun: ${hasRunDiscoveryRef.current}`);
-
         // Only discover once per file to prevent infinite loops
         if (discoveredFileRef.current === assetRiveFile && hasRunDiscoveryRef.current) {
-            console.log(`[ASSET DISCOVERY] ✋ SKIPPING - Already discovered ${assetRiveFile}`);
             return;
         }
 
         // Reset if file changed
         if (discoveredFileRef.current !== assetRiveFile) {
-            console.log(`[ASSET DISCOVERY] 🔄 File changed from ${discoveredFileRef.current} to ${assetRiveFile}`);
             discoveredFileRef.current = assetRiveFile;
             hasRunDiscoveryRef.current = false;
         }
-
-        console.log(`[ASSET DISCOVERY] ▶️ STARTING discovery for ${assetRiveFile}`);
 
         let attempts = 0;
         let stopped = false;
@@ -162,7 +156,6 @@ export const FrameEngine_Asset_Rive: React.FC<AssetRiveElementProps> = ({
         const discoverAll = () => {
             if (stopped || !rive) return;
             attempts++;
-            console.log(`[ASSET DISCOVERY] Attempt ${attempts} for ${assetRiveFile}`);
 
             try {
                 const smNames: string[] = Array.isArray(rive.stateMachineNames) ? rive.stateMachineNames : [];
@@ -270,11 +263,8 @@ export const FrameEngine_Asset_Rive: React.FC<AssetRiveElementProps> = ({
                     console.error("Error during asset Rive data binding discovery:", error);
                 }
 
-                console.log(`[ASSET DISCOVERY] ✅ Complete - Machines: ${machines.length}, Bindings: ${dataBindings.length}`);
-
                 // Mark that we've run discovery for this file
                 hasRunDiscoveryRef.current = true;
-                console.log(`[ASSET DISCOVERY] Set hasRunDiscoveryRef = true for ${assetRiveFile}`);
 
                 if (onRiveDiscovery) {
                     onRiveDiscovery(machines, dataBindings);
@@ -288,7 +278,6 @@ export const FrameEngine_Asset_Rive: React.FC<AssetRiveElementProps> = ({
                 const foundNothing = machines.length === 0 && totalInputs === 0 && totalBindings === 0;
 
                 if (foundNothing && attempts < maxAttempts) {
-                    console.log(`[ASSET DISCOVERY] Found nothing, will retry (attempt ${attempts}/${maxAttempts})`);
                     setTimeout(discoverAll, 120 * attempts);
                 }
 
