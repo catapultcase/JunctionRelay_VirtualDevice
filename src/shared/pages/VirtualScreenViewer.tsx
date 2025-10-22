@@ -585,6 +585,10 @@ export const VirtualScreenViewerComponent: React.FC<VirtualScreenViewerComponent
     }
 
     if (isEmbedded) {
+        // Calculate scale to fit canvas within container height
+        const scale = containerHeight / canvasConfig.height;
+        const scaledWidth = canvasConfig.width * scale;
+
         return (
             <Box sx={{
                 position: 'relative',
@@ -593,29 +597,41 @@ export const VirtualScreenViewerComponent: React.FC<VirtualScreenViewerComponent
                 backgroundColor: canvasConfig.backgroundColor,
                 borderRadius: 1,
                 overflow: 'hidden',
-                ...brightnessStyle
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
             }}>
-                <FrameEngine_BackgroundRenderer
-                    config={backgroundConfig}
-                    width={containerHeight ? Math.round((containerHeight / canvasConfig.height) * canvasConfig.width) : canvasConfig.width}
-                    height={containerHeight || canvasConfig.height}
-                    fit="contain"
-                    onRiveDiscovery={handleBackgroundDiscovery}
-                />
-
                 <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    zIndex: 1,
+                    width: canvasConfig.width,
+                    height: canvasConfig.height,
+                    transform: `scale(${scale})`,
+                    transformOrigin: 'center center',
+                    position: 'relative',
+                    backgroundColor: canvasConfig.backgroundColor,
+                    ...brightnessStyle
                 }}>
-                    <FrameEngine_ElementRenderer
-                        elements={displayElements}
-                        config={rendererConfig}
-                        sensorData={currentSensorData}
+                    <FrameEngine_BackgroundRenderer
+                        config={backgroundConfig}
+                        width={canvasConfig.width}
+                        height={canvasConfig.height}
+                        fit="none"
+                        onRiveDiscovery={handleBackgroundDiscovery}
                     />
+
+                    <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        zIndex: 1,
+                    }}>
+                        <FrameEngine_ElementRenderer
+                            elements={displayElements}
+                            config={rendererConfig}
+                            sensorData={currentSensorData}
+                        />
+                    </div>
                 </div>
 
                 {shouldShowControls && (
