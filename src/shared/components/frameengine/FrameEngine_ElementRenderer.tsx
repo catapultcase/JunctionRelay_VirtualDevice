@@ -403,6 +403,7 @@ export const FrameEngine_ElementRenderer: React.FC<ElementRendererProps> = ({
                         height={element.position.height}
                         waveformColor={element.properties.waveformColor || '#00ff00'}
                         backgroundColor={element.properties.backgroundColor || '#000000'}
+                        gridBackgroundColor={element.properties.gridBackgroundColor || 'transparent'}
                         gridColor={element.properties.gridColor || 'rgba(0, 255, 0, 0.2)'}
                         showGrid={element.properties.showGrid !== false}
                         showBorder={element.properties.showBorder !== false}
