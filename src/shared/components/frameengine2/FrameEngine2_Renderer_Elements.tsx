@@ -22,7 +22,7 @@
 // This is a deliberate architectural choice and does not violate PascalCase - the components ARE PascalCase
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import type { PlacedElement } from '../frameengine/FrameEngine_Types';
+import type { PlacedElement } from './types/FrameEngine2_LayoutTypes';
 import FrameEngine2_Element_Sensor from './elements/FrameEngine2_Element_Sensor';
 import FrameEngine2_Element_Text from './elements/FrameEngine2_Element_Text';
 import FrameEngine2_Element_Gauge from './elements/FrameEngine2_Element_Gauge';

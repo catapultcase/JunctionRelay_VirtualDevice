@@ -24,7 +24,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, useLocation } from 'react-router-dom';
 import { Box, Typography, CircularProgress, Alert, IconButton } from '@mui/material';
 import { Launch, Refresh } from '@mui/icons-material';
-import type { FrameLayoutConfig, PlacedElement } from '../components/frameengine/FrameEngine_Types';
+import type { FrameLayoutConfig, PlacedElement } from '../components/frameengine2/types/FrameEngine2_LayoutTypes';
 import {
     VirtualDisplayDataProvider,
     RiveConfig,
