@@ -17,6 +17,7 @@
     "@mui/x-charts": "^8.15.0",
     "@rive-app/react-canvas": "^4.23.4",
     "react-gauge-component": "^1.2.64",
+    "react-moveable": "^0.56.0",
     "three": "^0.180.0",
     "ws": "^8.18.0"
   },
