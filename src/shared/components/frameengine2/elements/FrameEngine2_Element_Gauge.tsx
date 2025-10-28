@@ -76,14 +76,10 @@ const FrameEngine2_Element_Gauge: React.FC<FrameEngine2_Element_GaugeProps> = ({
         const resolvedData = resolvedValues[sensorTag];
         if (resolvedData === undefined || resolvedData === null) return 0;
 
-        // Handle structured data {value, unit, label}
-        let rawValue;
-        if (typeof resolvedData === 'object' && 'value' in resolvedData) {
-            rawValue = resolvedData.value;
-        } else {
-            rawValue = resolvedData;
-        }
+        // Handle structured data {value, unit, label} - structured format only
+        if (typeof resolvedData !== 'object' || !('value' in resolvedData)) return 0;
 
+        const rawValue = resolvedData.value;
         const parsed = typeof rawValue === 'string' ? parseFloat(rawValue) : rawValue;
         return isNaN(parsed) ? 0 : parsed;
     }, [sensorTag, resolvedValues]);
@@ -148,5 +144,5 @@ const FrameEngine2_Element_Gauge: React.FC<FrameEngine2_Element_GaugeProps> = ({
     );
 };
 
-export default FrameEngine2_Element_Gauge;
+export default React.memo(FrameEngine2_Element_Gauge);
 

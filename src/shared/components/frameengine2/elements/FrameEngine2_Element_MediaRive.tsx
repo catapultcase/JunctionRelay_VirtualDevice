@@ -135,4 +135,4 @@ const FrameEngine2_Element_MediaRive: React.FC<MediaRiveElementProps> = ({
     );
 };
 
-export default FrameEngine2_Element_MediaRive;
+export default React.memo(FrameEngine2_Element_MediaRive);

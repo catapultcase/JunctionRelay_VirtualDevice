@@ -83,6 +83,15 @@ export interface CanvasSettings {
 }
 
 /**
+ * Sensor test value structure
+ */
+export interface SensorTestValue {
+    value?: string | number;
+    label?: string;
+    unit?: string;
+}
+
+/**
  * Frame layout configuration
  */
 export interface FrameLayoutConfig {
@@ -111,7 +120,7 @@ export interface FrameLayoutConfig {
     isDraft?: boolean;
     isPublished?: boolean;
     canvasSettings?: CanvasSettings;
-    sensorTestValues?: Record<string, any>;
+    sensorTestValues?: Record<string, SensorTestValue>;
     created?: string;
     lastModified?: string;
     createdBy?: string;
