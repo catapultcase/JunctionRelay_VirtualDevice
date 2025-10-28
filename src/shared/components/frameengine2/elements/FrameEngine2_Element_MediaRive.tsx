@@ -53,7 +53,8 @@ const FrameEngine2_Element_MediaRive: React.FC<MediaRiveElementProps> = ({
 }) => {
     const {
         filename = null,
-        autoplay = true
+        autoplay = true,
+        backgroundColor = 'transparent'
     } = properties;
 
     /**
@@ -129,7 +130,8 @@ const FrameEngine2_Element_MediaRive: React.FC<MediaRiveElementProps> = ({
             <RiveComponent style={{
                 width: '100%',
                 height: '100%',
-                display: 'block'
+                display: 'block',
+                backgroundColor
             }} />
         </div>
     );

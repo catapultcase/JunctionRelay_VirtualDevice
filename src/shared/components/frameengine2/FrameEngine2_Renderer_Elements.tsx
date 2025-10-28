@@ -21,8 +21,9 @@
 // Note: Component names use underscore naming convention for namespace organization (FrameEngine2_*)
 // This is a deliberate architectural choice and does not violate PascalCase - the components ARE PascalCase
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import type { PlacedElement } from './types/FrameEngine2_LayoutTypes';
+import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
+import Moveable from 'react-moveable';
+import type { PlacedElement, GridSettings } from './types/FrameEngine2_LayoutTypes';
 import FrameEngine2_Element_Sensor from './elements/FrameEngine2_Element_Sensor';
 import FrameEngine2_Element_Text from './elements/FrameEngine2_Element_Text';
 import FrameEngine2_Element_Gauge from './elements/FrameEngine2_Element_Gauge';
@@ -30,6 +31,22 @@ import FrameEngine2_Element_TimeDate from './elements/FrameEngine2_Element_TimeD
 import FrameEngine2_Element_MediaImage from './elements/FrameEngine2_Element_MediaImage';
 import FrameEngine2_Element_MediaVideo from './elements/FrameEngine2_Element_MediaVideo';
 import FrameEngine2_Element_MediaRive from './elements/FrameEngine2_Element_MediaRive';
+
+// Inject CSS to ensure Moveable controls are clickable
+// (Parent layer has pointer-events: none, so we need to override)
+if (typeof document !== 'undefined' && !document.getElementById('moveable-pointer-events-fix')) {
+    const style = document.createElement('style');
+    style.id = 'moveable-pointer-events-fix';
+    style.innerHTML = `
+        .moveable-control-box,
+        .moveable-control,
+        .moveable-line,
+        .moveable-direction {
+            pointer-events: auto !important;
+        }
+    `;
+    document.head.appendChild(style);
+}
 
 interface FrameEngine2_Renderer_ElementsProps {
     /** Element to render */
@@ -52,11 +69,14 @@ interface FrameEngine2_Renderer_ElementsProps {
 
     /** Element padding in pixels */
     elementPadding?: number;
+
+    /** Grid settings for snapping */
+    grid?: GridSettings;
 }
 
 /**
  * Element Renderer - Dispatches to the correct element component
- * and handles positioning and selection
+ * and handles positioning, selection, resize, and rotation
  */
 const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsProps> = ({
     element,
@@ -65,129 +85,15 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
     onUpdateElement,
     resolvedValues,
     showPlaceholders = true,
-    elementPadding = 4
+    elementPadding = 4,
+    grid
 }) => {
-    // Drag state
-    const [isDragging, setIsDragging] = useState(false);
-    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-    const [dragPosition, setDragPosition] = useState({ x: element.x, y: element.y });
-
     // Hover state for border highlighting
     const [isHovered, setIsHovered] = useState(false);
 
-    // Ref to track if we should update position on mouse up
-    const hasDragged = useRef(false);
+    // Ref for Moveable target element
+    const targetRef = useRef<HTMLDivElement>(null);
 
-    /**
-     * Handle mouse down - start dragging
-     * FIX: Calculate offset in canvas space (accounting for zoom scale)
-     */
-    const handleMouseDown = (e: React.MouseEvent) => {
-        e.stopPropagation();
-
-        // Get canvas container to read scale
-        const canvas = document.querySelector('[data-canvas-container="true"]') as HTMLElement;
-        if (!canvas) return;
-
-        // Get the current scale from the transform
-        const computedStyle = window.getComputedStyle(canvas);
-        const transform = computedStyle.transform;
-
-        // Parse scale from transform matrix
-        let scale = 1;
-        if (transform && transform !== 'none') {
-            const matrixMatch = transform.match(/matrix\(([^,]+),\s*([^,]+),\s*([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)/);
-            if (matrixMatch) {
-                scale = parseFloat(matrixMatch[1]);
-            }
-        }
-
-        // Calculate offset from element top-left to mouse position
-        // Element rect is in screen space (scaled), so divide by scale for canvas space
-        const rect = e.currentTarget.getBoundingClientRect();
-        const offsetX = (e.clientX - rect.left) / scale;
-        const offsetY = (e.clientY - rect.top) / scale;
-
-        setDragOffset({ x: offsetX, y: offsetY });
-        setIsDragging(true);
-        hasDragged.current = false;
-    };
-
-    /**
-     * Handle mouse move - update position during drag
-     * Optimized: Removed dragPosition from dependencies to avoid event listener thrashing
-     * FIX: Account for zoom scale when calculating canvas coordinates
-     */
-    useEffect(() => {
-        if (!isDragging) return;
-
-        const handleMouseMove = (e: MouseEvent) => {
-            hasDragged.current = true;
-
-            // Get canvas container to calculate relative position
-            const canvas = document.querySelector('[data-canvas-container="true"]') as HTMLElement;
-            if (!canvas) return;
-
-            // Get the current scale from the transform
-            const computedStyle = window.getComputedStyle(canvas);
-            const transform = computedStyle.transform;
-
-            // Parse scale from transform matrix
-            // transform will be like "matrix(sx, 0, 0, sy, tx, ty)" where sx/sy are scale
-            let scale = 1;
-            if (transform && transform !== 'none') {
-                const matrixMatch = transform.match(/matrix\(([^,]+),\s*([^,]+),\s*([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)/);
-                if (matrixMatch) {
-                    scale = parseFloat(matrixMatch[1]); // sx is the x scale factor
-                }
-            }
-
-            const canvasRect = canvas.getBoundingClientRect();
-
-            // Calculate new position relative to canvas, accounting for scale
-            // Screen coordinates need to be divided by scale to get canvas coordinates
-            const screenX = e.clientX - canvasRect.left;
-            const screenY = e.clientY - canvasRect.top;
-
-            const newX = screenX / scale - dragOffset.x;
-            const newY = screenY / scale - dragOffset.y;
-
-            setDragPosition({ x: newX, y: newY });
-        };
-
-        const handleMouseUp = () => {
-            setIsDragging(false);
-
-            // Only update if element was actually dragged
-            // Use functional state access to get latest position
-            if (hasDragged.current && onUpdateElement) {
-                setDragPosition(finalPos => {
-                    onUpdateElement(element.id, {
-                        x: finalPos.x,
-                        y: finalPos.y
-                    });
-                    return finalPos;
-                });
-            }
-        };
-
-        window.addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('mouseup', handleMouseUp);
-
-        return () => {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
-        };
-    }, [isDragging, dragOffset.x, dragOffset.y, element.id, onUpdateElement]);
-
-    /**
-     * Reset drag position when element position changes externally
-     */
-    useEffect(() => {
-        if (!isDragging) {
-            setDragPosition({ x: element.x, y: element.y });
-        }
-    }, [element.x, element.y, isDragging]);
 
     /**
      * Render the appropriate element component based on type
@@ -290,18 +196,13 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
         }
     }, [element.type, element.properties, element.width, element.height, resolvedValues, showPlaceholders, elementPadding]);
 
-    const currentX = isDragging ? dragPosition.x : element.x;
-    const currentY = isDragging ? dragPosition.y : element.y;
-
     /**
-     * Handle click - only trigger if not dragging
+     * Handle click - select element
      * OPTIMIZATION: Wrapped in useCallback
      */
     const handleClick = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!hasDragged.current) {
-            onClick?.(element.id);
-        }
+        onClick?.(element.id);
     }, [onClick, element.id]);
 
     /**
@@ -309,29 +210,18 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
      * OPTIMIZATION: State-based styling instead of direct DOM manipulation
      */
     const handleMouseEnter = useCallback(() => {
-        if (!isSelected && !isDragging) {
+        if (!isSelected) {
             setIsHovered(true);
         }
-    }, [isSelected, isDragging]);
+    }, [isSelected]);
 
     /**
      * Handle mouse leave for hover state
      * OPTIMIZATION: State-based styling instead of direct DOM manipulation
-     * FIX: Always clear hover state on mouse leave to prevent stale hover styling
      */
     const handleMouseLeave = useCallback(() => {
         setIsHovered(false);
     }, []);
-
-    /**
-     * Clear hover state when element becomes selected
-     * Prevents hover border from showing when element is deselected
-     */
-    useEffect(() => {
-        if (isSelected) {
-            setIsHovered(false);
-        }
-    }, [isSelected]);
 
     /**
      * Memoized element wrapper style
@@ -339,43 +229,132 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
      */
     const elementWrapperStyle = useMemo(() => {
         // Determine border based on state
+        // IMPORTANT: Always use 2px border to prevent content shift when selecting
         let border;
         if (isSelected) {
             border = '2px solid #2196f3';
         } else if (isHovered) {
-            border = '1px solid rgba(33, 150, 243, 0.5)';
+            border = '2px solid rgba(33, 150, 243, 0.5)';
+        } else if (grid?.showOutlines) {
+            // Show outlines for all elements when showOutlines is enabled
+            border = '2px solid rgba(128, 128, 128, 0.3)';
         } else {
-            border = '1px solid transparent';
+            border = '2px solid transparent';
         }
 
         return {
             position: 'absolute' as const,
-            left: `${currentX}px`,
-            top: `${currentY}px`,
+            transform: `translate(${element.x}px, ${element.y}px) rotate(${element.rotation}deg)`,
             width: `${element.width}px`,
             height: `${element.height}px`,
-            cursor: isDragging ? 'move' : 'pointer',
+            cursor: 'pointer',
             border,
             boxSizing: 'border-box' as const,
-            transition: isDragging ? 'none' : 'border-color 0.15s ease',
-            pointerEvents: 'auto' as const,
-            boxShadow: isDragging ? '0 4px 12px rgba(0, 0, 0, 0.3)' : 'none',
-            opacity: isDragging ? 0.9 : 1,
-            zIndex: isDragging ? 1000 : element.zIndex,
+            transition: 'border-color 0.15s ease',
+            pointerEvents: (element.locked ? 'none' : 'auto') as 'none' | 'auto',
+            zIndex: element.zIndex,
             userSelect: 'none' as const
         };
-    }, [currentX, currentY, element.width, element.height, element.zIndex, isDragging, isSelected, isHovered]);
+    }, [element.x, element.y, element.width, element.height, element.rotation, element.zIndex, element.locked, isSelected, isHovered, grid?.showOutlines]);
+
+    // Don't render hidden elements (check after all hooks to maintain hook order)
+    if (!element.visible) {
+        return null;
+    }
 
     return (
-        <div
-            onMouseDown={handleMouseDown}
-            onClick={handleClick}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            style={elementWrapperStyle}
-        >
-            {renderedElement}
-        </div>
+        <>
+            <div
+                ref={targetRef}
+                onClick={!isSelected ? handleClick : undefined}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                style={elementWrapperStyle}
+            >
+                {renderedElement}
+            </div>
+
+            {/* Moveable Controls - Only render when selected and not locked */}
+            {isSelected && !element.locked && (
+                <Moveable
+                    target={targetRef}
+                    draggable={true}
+                    resizable={true}
+                    rotatable={true}
+                    origin={false}
+
+                    // Make handles easier to click
+                    controlPadding={5}
+
+                    // Prevent element from blocking handle clicks
+                    dragArea={false}
+
+                    // Snap to grid when enabled
+                    snappable={grid?.snapToGrid}
+                    snapGridWidth={grid?.gridSize}
+                    snapGridHeight={grid?.gridSize}
+                    isDisplayGridGuidelines={false}
+
+                    // Resize handles: corners and edges
+                    renderDirections={["nw", "n", "ne", "w", "e", "sw", "s", "se"]}
+
+                    // Drag handlers
+                    onDrag={({ transform }) => {
+                        if (targetRef.current) {
+                            targetRef.current.style.transform = transform;
+                        }
+                    }}
+                    onDragEnd={({ lastEvent }) => {
+                        if (lastEvent && onUpdateElement) {
+                            const beforeTranslate = lastEvent.beforeTranslate;
+                            onUpdateElement(element.id, {
+                                x: beforeTranslate[0],
+                                y: beforeTranslate[1]
+                            });
+                        }
+                    }}
+
+                    // Resize handlers
+                    onResize={({ width, height, drag }) => {
+                        if (targetRef.current) {
+                            targetRef.current.style.width = `${width}px`;
+                            targetRef.current.style.height = `${height}px`;
+                            targetRef.current.style.transform = drag.transform;
+                        }
+                    }}
+                    onResizeEnd={({ lastEvent }) => {
+                        if (lastEvent && onUpdateElement) {
+                            const beforeTranslate = lastEvent.drag.beforeTranslate;
+                            onUpdateElement(element.id, {
+                                width: lastEvent.width,
+                                height: lastEvent.height,
+                                x: beforeTranslate[0],
+                                y: beforeTranslate[1]
+                            });
+                        }
+                    }}
+
+                    // Rotation handlers
+                    onRotate={({ transform }) => {
+                        if (targetRef.current) {
+                            targetRef.current.style.transform = transform;
+                        }
+                    }}
+                    onRotateEnd={({ lastEvent }) => {
+                        if (lastEvent && onUpdateElement) {
+                            onUpdateElement(element.id, {
+                                rotation: lastEvent.rotate
+                            });
+                        }
+                    }}
+
+                    // Click handler for when element is clicked (keeps it selected)
+                    onClick={() => {
+                        onClick?.(element.id);
+                    }}
+                />
+            )}
+        </>
     );
 };
 
