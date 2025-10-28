@@ -201,7 +201,7 @@ export const VirtualScreenViewer2Component: React.FC<VirtualScreenViewer2Compone
 
         // Update each sensor tag through the SensorTagManager
         Object.entries(sensorPayload.sensors).forEach(([tag, sensorData]) => {
-            updateSensor(tag, sensorData.value);
+            updateSensor(tag, sensorData);
         });
 
         processBrightnessSensor(sensorPayload);
