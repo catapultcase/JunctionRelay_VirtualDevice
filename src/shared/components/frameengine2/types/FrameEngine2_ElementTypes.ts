@@ -140,6 +140,24 @@ export interface MediaRiveProperties {
 }
 
 /**
+ * Properties for ECG/Waveform element type
+ */
+export interface ECGProperties {
+    sensorTag: string;
+    yAxisMin: number;
+    yAxisMax: number;
+    bufferSize: number;
+    lineWidth: number;
+    gridScrollSpeed: number;
+    waveformColor: string;
+    backgroundColor: string;
+    gridBackgroundColor: string;
+    gridColor: string;
+    showGrid: boolean;
+    showBorder: boolean;
+}
+
+/**
  * Union type for all element default properties
  *
  * This ensures type safety when accessing default properties
@@ -152,4 +170,5 @@ export type ElementDefaultProperties =
     | TimeDateProperties
     | MediaImageProperties
     | MediaVideoProperties
-    | MediaRiveProperties;
+    | MediaRiveProperties
+    | ECGProperties;
