@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { VirtualScreenViewerComponent } from './shared/pages/VirtualScreenViewer';
+import { VirtualScreenViewer2Component } from './shared/pages/VirtualScreenViewer2';
 import { ElectronDataProvider } from '../ElectronDataProvider';
 import { FpsCounter } from './components/FpsCounter';
 
@@ -86,7 +86,7 @@ function VisualizationApp() {
           height: '100%',
         }}
       >
-        <VirtualScreenViewerComponent
+        <VirtualScreenViewer2Component
           deviceId="electron-virtual-device"
           deviceData={deviceData}
           isStandalone={true}
