@@ -146,6 +146,7 @@ export const VirtualScreenViewer2Component: React.FC<VirtualScreenViewer2Compone
                 grid: {
                     snapToGrid: false,
                     showGrid: false,
+                    showOutlines: false,
                     gridSize: 10,
                     gridColor: '#333333'
                 },
@@ -227,6 +228,7 @@ export const VirtualScreenViewer2Component: React.FC<VirtualScreenViewer2Compone
             y: element.y,
             width: element.width,
             height: element.height,
+            rotation: element.rotation ?? 0,
             properties: element.properties,
             visible: element.visible ?? true,
             locked: element.locked ?? false,

@@ -43,6 +43,7 @@ interface PlacedElementBase {
     y: number;
     width: number;
     height: number;
+    rotation: number; // Rotation angle in degrees (0-360)
     visible: boolean;
     locked: boolean;
     zIndex?: number;
@@ -67,6 +68,7 @@ export type PlacedElement =
 export interface GridSettings {
     snapToGrid: boolean;
     showGrid: boolean;
+    showOutlines: boolean;
     gridSize: number;
     gridColor: string;
 }

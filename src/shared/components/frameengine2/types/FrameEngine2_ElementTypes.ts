@@ -136,6 +136,7 @@ export interface MediaVideoProperties {
 export interface MediaRiveProperties {
     filename: string | null;
     autoplay: boolean;
+    backgroundColor: string;
 }
 
 /**
