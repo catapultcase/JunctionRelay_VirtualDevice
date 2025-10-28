@@ -21,8 +21,7 @@
 // Note: Component names use underscore naming convention for namespace organization (FrameEngine2_*)
 // This is a deliberate architectural choice and does not violate PascalCase - the components ARE PascalCase
 
-import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
-import Moveable from 'react-moveable';
+import React, { useState, useRef, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import type { PlacedElement, GridSettings } from './types/FrameEngine2_LayoutTypes';
 import FrameEngine2_Element_Sensor from './elements/FrameEngine2_Element_Sensor';
 import FrameEngine2_Element_Text from './elements/FrameEngine2_Element_Text';
@@ -31,6 +30,10 @@ import FrameEngine2_Element_TimeDate from './elements/FrameEngine2_Element_TimeD
 import FrameEngine2_Element_MediaImage from './elements/FrameEngine2_Element_MediaImage';
 import FrameEngine2_Element_MediaVideo from './elements/FrameEngine2_Element_MediaVideo';
 import FrameEngine2_Element_MediaRive from './elements/FrameEngine2_Element_MediaRive';
+import FrameEngine2_Element_ECG from './elements/FrameEngine2_Element_ECG';
+
+// Lazy load Moveable (120KB) - only needed when element is selected
+const Moveable = lazy(() => import('react-moveable'));
 
 // Inject CSS to ensure Moveable controls are clickable
 // (Parent layer has pointer-events: none, so we need to override)
@@ -72,6 +75,9 @@ interface FrameEngine2_Renderer_ElementsProps {
 
     /** Grid settings for snapping */
     grid?: GridSettings;
+
+    /** Preview mode - disables selection and editing */
+    previewMode?: boolean;
 }
 
 /**
@@ -86,7 +92,8 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
     resolvedValues,
     showPlaceholders = true,
     elementPadding = 4,
-    grid
+    grid,
+    previewMode = false
 }) => {
     // Hover state for border highlighting
     const [isHovered, setIsHovered] = useState(false);
@@ -175,6 +182,18 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
                     />
                 );
 
+            case 'ecg':
+                return (
+                    <FrameEngine2_Element_ECG
+                        properties={element.properties}
+                        resolvedValues={resolvedValues}
+                        showPlaceholders={showPlaceholders}
+                        elementPadding={elementPadding}
+                        width={element.width}
+                        height={element.height}
+                    />
+                );
+
             default:
                 // TypeScript knows this is unreachable for valid types
                 // but we keep it for runtime safety
@@ -247,20 +266,15 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
             transform: `translate(${element.x}px, ${element.y}px) rotate(${element.rotation}deg)`,
             width: `${element.width}px`,
             height: `${element.height}px`,
-            cursor: 'pointer',
+            cursor: previewMode ? 'default' : 'pointer',
             border,
             boxSizing: 'border-box' as const,
             transition: 'border-color 0.15s ease',
-            pointerEvents: (element.locked ? 'none' : 'auto') as 'none' | 'auto',
+            pointerEvents: (element.locked || previewMode ? 'none' : 'auto') as 'none' | 'auto',
             zIndex: element.zIndex,
             userSelect: 'none' as const
         };
-    }, [element.x, element.y, element.width, element.height, element.rotation, element.zIndex, element.locked, isSelected, isHovered, grid?.showOutlines]);
-
-    // Don't render hidden elements (check after all hooks to maintain hook order)
-    if (!element.visible) {
-        return null;
-    }
+    }, [element.x, element.y, element.width, element.height, element.rotation, element.zIndex, element.locked, isSelected, isHovered, grid?.showOutlines, previewMode]);
 
     return (
         <>
@@ -274,9 +288,10 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
                 {renderedElement}
             </div>
 
-            {/* Moveable Controls - Only render when selected and not locked */}
-            {isSelected && !element.locked && (
-                <Moveable
+            {/* Moveable Controls - Only render when selected, not locked, and not in preview mode */}
+            {isSelected && !element.locked && !previewMode && (
+                <Suspense fallback={null}>
+                    <Moveable
                     target={targetRef}
                     draggable={true}
                     resizable={true}
@@ -353,6 +368,7 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
                         onClick?.(element.id);
                     }}
                 />
+                </Suspense>
             )}
         </>
     );

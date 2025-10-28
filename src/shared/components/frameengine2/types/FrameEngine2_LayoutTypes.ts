@@ -31,7 +31,8 @@ import type {
     TimeDateProperties,
     MediaImageProperties,
     MediaVideoProperties,
-    MediaRiveProperties
+    MediaRiveProperties,
+    ECGProperties
 } from './FrameEngine2_ElementTypes';
 
 /**
@@ -60,7 +61,8 @@ export type PlacedElement =
     | (PlacedElementBase & { type: 'timedate'; properties: TimeDateProperties })
     | (PlacedElementBase & { type: 'media-image'; properties: MediaImageProperties })
     | (PlacedElementBase & { type: 'media-video'; properties: MediaVideoProperties })
-    | (PlacedElementBase & { type: 'media-rive'; properties: MediaRiveProperties });
+    | (PlacedElementBase & { type: 'media-rive'; properties: MediaRiveProperties })
+    | (PlacedElementBase & { type: 'ecg'; properties: ECGProperties });
 
 /**
  * Canvas grid settings
