@@ -73,9 +73,18 @@ const FrameEngine2_Element_Gauge: React.FC<FrameEngine2_Element_GaugeProps> = ({
     // Element just provides its own default if no value exists
     const displayValue = useMemo(() => {
         if (!sensorTag) return 0;
-        const value = resolvedValues[sensorTag];
-        if (value === undefined || value === null) return 0;
-        const parsed = typeof value === 'string' ? parseFloat(value) : value;
+        const resolvedData = resolvedValues[sensorTag];
+        if (resolvedData === undefined || resolvedData === null) return 0;
+
+        // Handle structured data {value, unit, label}
+        let rawValue;
+        if (typeof resolvedData === 'object' && 'value' in resolvedData) {
+            rawValue = resolvedData.value;
+        } else {
+            rawValue = resolvedData;
+        }
+
+        const parsed = typeof rawValue === 'string' ? parseFloat(rawValue) : rawValue;
         return isNaN(parsed) ? 0 : parsed;
     }, [sensorTag, resolvedValues]);
 

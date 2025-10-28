@@ -79,6 +79,7 @@ export interface CanvasSettings {
     elementPadding: number;
     testBindingsEnabled?: boolean;
     testBindingsInterval?: number;
+    includedSensorTags?: string[];
 }
 
 /**
