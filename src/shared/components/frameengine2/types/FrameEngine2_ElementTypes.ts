@@ -25,6 +25,15 @@
  */
 
 /**
+ * 9-directional alignment type
+ * Covers all combinations of horizontal and vertical positioning
+ */
+export type Alignment9Way =
+    | 'top-left' | 'top-center' | 'top-right'
+    | 'middle-left' | 'center' | 'middle-right'
+    | 'bottom-left' | 'bottom-center' | 'bottom-right';
+
+/**
  * Properties for Sensor element type
  */
 export interface SensorProperties {
@@ -39,8 +48,9 @@ export interface SensorProperties {
     fontWeight: string;
     textColor: string;
     backgroundColor: string;
-    textAlign: string;
-    verticalAlign: string;
+    textAlign: 'left' | 'center' | 'right';
+    verticalAlign: 'top' | 'center' | 'bottom';
+    alignment: Alignment9Way;
 }
 
 /**
@@ -53,8 +63,9 @@ export interface TextProperties {
     fontWeight: string;
     color: string;
     backgroundColor: string;
-    textAlign: string;
-    verticalAlign: string;
+    textAlign: 'left' | 'center' | 'right';
+    verticalAlign: 'top' | 'center' | 'bottom';
+    alignment: Alignment9Way;
 }
 
 /**
@@ -94,8 +105,8 @@ export interface TimeDateProperties {
     fontWeight: string;
     textColor: string;
     backgroundColor: string;
-    textAlign: string;
-    verticalAlign: string;
+    textAlign: 'left' | 'center' | 'right';
+    verticalAlign: 'top' | 'center' | 'bottom';
 }
 
 /**

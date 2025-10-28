@@ -17,25 +17,9 @@
  * along with JunctionRelay. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { useEffect } from 'react';
-
-/**
- * Load a Google Font dynamically
- */
-const loadGoogleFont = (fontFamily: string) => {
-    // Check if font is already loaded
-    const linkId = `google-font-${fontFamily.replace(/\s+/g, '-')}`;
-    if (document.getElementById(linkId)) {
-        return;
-    }
-
-    // Create link element to load the font
-    const link = document.createElement('link');
-    link.id = linkId;
-    link.rel = 'stylesheet';
-    link.href = `https://fonts.googleapis.com/css2?family=${fontFamily.replace(/\s+/g, '+')}:wght@400;700&display=swap`;
-    document.head.appendChild(link);
-};
+import React, { useEffect, useMemo } from 'react';
+import { loadGoogleFont } from '../FrameEngine2_FontLoader';
+import type { Alignment9Way } from '../types/FrameEngine2_ElementTypes';
 
 /**
  * Props for the Text element component
@@ -51,6 +35,7 @@ interface TextElementProps {
         backgroundColor?: string;
         textAlign?: 'left' | 'center' | 'right';
         verticalAlign?: 'top' | 'center' | 'bottom';
+        alignment?: Alignment9Way;
         [key: string]: any;
     };
 
@@ -61,6 +46,24 @@ interface TextElementProps {
     width: number;
     height: number;
 }
+
+/**
+ * Convert 9-way alignment to flexbox properties
+ */
+const getAlignmentStyles = (alignment: Alignment9Way) => {
+    const alignmentMap: Record<Alignment9Way, { alignItems: string; justifyContent: string }> = {
+        'top-left': { alignItems: 'flex-start', justifyContent: 'flex-start' },
+        'top-center': { alignItems: 'flex-start', justifyContent: 'center' },
+        'top-right': { alignItems: 'flex-start', justifyContent: 'flex-end' },
+        'middle-left': { alignItems: 'center', justifyContent: 'flex-start' },
+        'center': { alignItems: 'center', justifyContent: 'center' },
+        'middle-right': { alignItems: 'center', justifyContent: 'flex-end' },
+        'bottom-left': { alignItems: 'flex-end', justifyContent: 'flex-start' },
+        'bottom-center': { alignItems: 'flex-end', justifyContent: 'center' },
+        'bottom-right': { alignItems: 'flex-end', justifyContent: 'flex-end' }
+    };
+    return alignmentMap[alignment];
+};
 
 /**
  * Text Element - Displays static text labels
@@ -79,7 +82,8 @@ const FrameEngine2_Element_Text: React.FC<TextElementProps> = ({
         color = '#000000',
         backgroundColor = 'transparent',
         textAlign = 'left',
-        verticalAlign = 'center'
+        verticalAlign = 'center',
+        alignment = 'center'
     } = properties;
 
     // Load Google Font when needed
@@ -91,6 +95,16 @@ const FrameEngine2_Element_Text: React.FC<TextElementProps> = ({
 
     // Format font family for CSS (add quotes if it contains spaces)
     const cssFontFamily = fontFamily.includes(' ') ? `"${fontFamily}"` : fontFamily;
+
+    // Get alignment styles (memoized for performance)
+    const alignmentStyles = useMemo(() => getAlignmentStyles(alignment), [alignment]);
+
+    // Derive text alignment from 9-way alignment for text content
+    const derivedTextAlign = useMemo(() => {
+        if (alignment.includes('left')) return 'left';
+        if (alignment.includes('right')) return 'right';
+        return 'center';
+    }, [alignment]);
 
     return (
         <div
@@ -104,9 +118,9 @@ const FrameEngine2_Element_Text: React.FC<TextElementProps> = ({
                 color,
                 backgroundColor,
                 display: 'flex',
-                alignItems: verticalAlign === 'top' ? 'flex-start' : verticalAlign === 'bottom' ? 'flex-end' : 'center',
-                justifyContent: textAlign === 'left' ? 'flex-start' : textAlign === 'right' ? 'flex-end' : 'center',
-                textAlign,
+                alignItems: alignmentStyles.alignItems,
+                justifyContent: alignmentStyles.justifyContent,
+                textAlign: derivedTextAlign,
                 wordWrap: 'break-word',
                 overflow: 'hidden'
             }}

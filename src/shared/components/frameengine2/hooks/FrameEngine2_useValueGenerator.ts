@@ -18,7 +18,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import type { FrameLayoutConfig, PlacedElement } from '../../frameengine/FrameEngine_Types';
+import type { FrameLayoutConfig, PlacedElement } from '../types/FrameEngine2_LayoutTypes';
 
 /**
  * Parameters for useValueGenerator hook
@@ -83,7 +83,8 @@ export function useValueGenerator(params: UseValueGeneratorParams): UseValueGene
     const allSensorTags = useMemo(() => {
         const tags = new Set<string>();
         elements.forEach(element => {
-            if (element.properties?.sensorTag && typeof element.properties.sensorTag === 'string') {
+            // Type guard: only sensor and gauge elements have sensorTag
+            if ((element.type === 'sensor' || element.type === 'gauge') && element.properties.sensorTag) {
                 tags.add(element.properties.sensorTag);
             }
         });

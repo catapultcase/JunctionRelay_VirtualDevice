@@ -194,7 +194,10 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
      * Memoized to prevent expensive element recreation (especially for Gauge)
      */
     const renderedElement = useMemo(() => {
-        switch (element.type) {
+        // Capture type for use in default case (discriminated union narrows to never)
+        const elementType = element.type;
+
+        switch (elementType) {
             case 'sensor':
                 return (
                     <FrameEngine2_Element_Sensor
@@ -267,6 +270,8 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
                 );
 
             default:
+                // TypeScript knows this is unreachable for valid types
+                // but we keep it for runtime safety
                 return (
                     <div
                         style={{
@@ -279,7 +284,7 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
                             color: '#999'
                         }}
                     >
-                        Unknown: {element.type}
+                        Unknown: {elementType}
                     </div>
                 );
         }

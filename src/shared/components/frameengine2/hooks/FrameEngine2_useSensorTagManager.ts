@@ -18,7 +18,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import type { FrameLayoutConfig, PlacedElement } from '../../frameengine/FrameEngine_Types';
+import type { FrameLayoutConfig, PlacedElement } from '../types/FrameEngine2_LayoutTypes';
 import type {
     SensorTagInput,
     SensorTagOutput,
@@ -115,8 +115,8 @@ export function useSensorTagManager(params: UseSensorTagManagerParams): UseSenso
 
         // Scan elements for sensor tags
         elements.forEach(element => {
-            // Check for direct sensorTag property (used by sensor, gauge, ecg, oscilloscope, tunnel elements)
-            if (element.properties.sensorTag && typeof element.properties.sensorTag === 'string') {
+            // Type guard: Check for direct sensorTag property (sensor and gauge elements)
+            if ((element.type === 'sensor' || element.type === 'gauge') && element.properties.sensorTag) {
                 const tag = element.properties.sensorTag;
                 addTarget(tag, {
                     type: 'element-property',
