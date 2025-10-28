@@ -130,4 +130,4 @@ const FrameEngine2_Element_Text: React.FC<TextElementProps> = ({
     );
 };
 
-export default FrameEngine2_Element_Text;
+export default React.memo(FrameEngine2_Element_Text);

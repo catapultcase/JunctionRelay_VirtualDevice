@@ -145,19 +145,11 @@ const FrameEngine2_Element_Sensor: React.FC<SensorElementProps> = ({
     // Check if we have live or test data (resolvedValues hierarchy is already applied by SensorTagManager)
     const resolvedData = sensorTag ? resolvedValues[sensorTag] : undefined;
 
-    if (resolvedData !== undefined && resolvedData !== null) {
-        // Live or Test data is available
-        if (typeof resolvedData === 'object' && 'value' in resolvedData) {
-            // Structured data with value and unit
-            valueToDisplay = resolvedData.value;
-            unitToDisplay = resolvedData.unit || '';
-            labelToDisplay = resolvedData.label || placeholderSensorLabel;
-        } else {
-            // Simple value (backwards compatibility)
-            valueToDisplay = resolvedData;
-            unitToDisplay = placeholderUnit;
-            labelToDisplay = placeholderSensorLabel;
-        }
+    if (resolvedData !== undefined && resolvedData !== null && typeof resolvedData === 'object' && 'value' in resolvedData) {
+        // Live or Test data is available - structured format only
+        valueToDisplay = resolvedData.value;
+        unitToDisplay = resolvedData.unit || '';
+        labelToDisplay = resolvedData.label || placeholderSensorLabel;
     } else {
         // No live/test data - use placeholder
         if (!showPlaceholders) {
@@ -221,4 +213,4 @@ const FrameEngine2_Element_Sensor: React.FC<SensorElementProps> = ({
     );
 };
 
-export default FrameEngine2_Element_Sensor;
+export default React.memo(FrameEngine2_Element_Sensor);

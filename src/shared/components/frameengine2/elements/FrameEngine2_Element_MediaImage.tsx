@@ -141,4 +141,4 @@ const FrameEngine2_Element_MediaImage: React.FC<MediaImageElementProps> = ({
     );
 };
 
-export default FrameEngine2_Element_MediaImage;
+export default React.memo(FrameEngine2_Element_MediaImage);

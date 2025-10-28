@@ -150,4 +150,4 @@ const FrameEngine2_Element_MediaVideo: React.FC<MediaVideoElementProps> = ({
     );
 };
 
-export default FrameEngine2_Element_MediaVideo;
+export default React.memo(FrameEngine2_Element_MediaVideo);
