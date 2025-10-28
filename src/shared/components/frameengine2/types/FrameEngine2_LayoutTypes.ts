@@ -24,21 +24,42 @@
  * Pure FrameEngine2 format - NO backwards compatibility.
  */
 
+import type {
+    SensorProperties,
+    TextProperties,
+    GaugeProperties,
+    TimeDateProperties,
+    MediaImageProperties,
+    MediaVideoProperties,
+    MediaRiveProperties
+} from './FrameEngine2_ElementTypes';
+
 /**
- * Placed element in FrameEngine2 format
- * Elements have x, y, width, height as direct properties (not nested)
+ * Base interface for common element properties
  */
-export interface PlacedElement {
+interface PlacedElementBase {
     id: string;
-    type: string;
     x: number;
     y: number;
     width: number;
     height: number;
-    properties: any;
     visible: boolean;
+    locked: boolean;
     zIndex?: number;
 }
+
+/**
+ * Discriminated union type for PlacedElement
+ * Each element type has properly typed properties based on its type field
+ */
+export type PlacedElement =
+    | (PlacedElementBase & { type: 'sensor'; properties: SensorProperties })
+    | (PlacedElementBase & { type: 'text'; properties: TextProperties })
+    | (PlacedElementBase & { type: 'gauge'; properties: GaugeProperties })
+    | (PlacedElementBase & { type: 'timedate'; properties: TimeDateProperties })
+    | (PlacedElementBase & { type: 'media-image'; properties: MediaImageProperties })
+    | (PlacedElementBase & { type: 'media-video'; properties: MediaVideoProperties })
+    | (PlacedElementBase & { type: 'media-rive'; properties: MediaRiveProperties });
 
 /**
  * Canvas grid settings
@@ -56,29 +77,45 @@ export interface GridSettings {
 export interface CanvasSettings {
     grid: GridSettings;
     elementPadding: number;
+    testBindingsEnabled?: boolean;
+    testBindingsInterval?: number;
 }
 
 /**
  * Frame layout configuration
  */
 export interface FrameLayoutConfig {
+    id?: number;
     displayName: string;
-    layoutType: 'frameengine2';
+    description?: string;
+    layoutType: string;
     width: number;
     height: number;
-    backgroundColor: string;
-    backgroundType: 'color' | 'image' | 'video' | 'rive';
+    orientation?: string;
+    backgroundColor?: string;
+    backgroundType?: string;
     backgroundImageUrl?: string | null;
-    backgroundImageFit?: 'cover' | 'contain' | 'fill' | 'none';
+    backgroundImageFit?: 'cover' | 'contain' | 'fill' | 'tile' | 'stretch' | 'none';
     backgroundVideoUrl?: string | null;
-    backgroundVideoFit?: 'cover' | 'contain' | 'fill' | 'none';
+    backgroundVideoFit?: 'cover' | 'contain' | 'fill' | 'stretch' | 'none';
     videoLoop?: boolean;
     videoMuted?: boolean;
     videoAutoplay?: boolean;
+    backgroundOpacity?: number;
     riveFile?: string | null;
     riveStateMachine?: string | null;
     riveInputs?: Record<string, any> | null;
     riveBindings?: Record<string, any> | null;
     isTemplate: boolean;
+    isDraft?: boolean;
+    isPublished?: boolean;
     canvasSettings?: CanvasSettings;
+    sensorTestValues?: Record<string, any>;
+    created?: string;
+    lastModified?: string;
+    createdBy?: string;
+    version?: string;
+    thumbnailOverride?: boolean;
+    jsonFrameConfig?: string;
+    jsonFrameElements?: string;
 }

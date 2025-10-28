@@ -23,7 +23,7 @@
 
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { useRive, UseRiveParameters } from '@rive-app/react-canvas';
-import type { FrameLayoutConfig } from '../frameengine/FrameEngine_Types';
+import type { FrameLayoutConfig } from './types/FrameEngine2_LayoutTypes';
 
 interface FrameEngine2_Renderer_BackgroundProps {
     layout: FrameLayoutConfig;

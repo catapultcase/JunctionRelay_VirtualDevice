@@ -18,24 +18,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-
-/**
- * Load a Google Font dynamically
- */
-const loadGoogleFont = (fontFamily: string) => {
-    // Check if font is already loaded
-    const linkId = `google-font-${fontFamily.replace(/\s+/g, '-')}`;
-    if (document.getElementById(linkId)) {
-        return;
-    }
-
-    // Create link element to load the font
-    const link = document.createElement('link');
-    link.id = linkId;
-    link.rel = 'stylesheet';
-    link.href = `https://fonts.googleapis.com/css2?family=${fontFamily.replace(/\s+/g, '+')}:wght@400;700&display=swap`;
-    document.head.appendChild(link);
-};
+import { loadGoogleFont } from '../FrameEngine2_FontLoader';
 
 /**
  * Props for the TimeDate element component

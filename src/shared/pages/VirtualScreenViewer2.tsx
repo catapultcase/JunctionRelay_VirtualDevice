@@ -137,7 +137,7 @@ export const VirtualScreenViewer2Component: React.FC<VirtualScreenViewer2Compone
             videoLoop: (background as any)?.videoLoop !== false,
             videoMuted: (background as any)?.videoMuted !== false,
             videoAutoplay: (background as any)?.videoAutoplay !== false,
-            riveFile: frameConfig?.rive?.fileUrl || null,
+            riveFile: (background as any)?.riveFile || null,
             riveStateMachine: (background as any)?.riveStateMachine || null,
             riveInputs: (background as any)?.riveInputs || null,
             riveBindings: (background as any)?.riveBindings || null,
@@ -229,6 +229,8 @@ export const VirtualScreenViewer2Component: React.FC<VirtualScreenViewer2Compone
             height: element.height,
             properties: element.properties,
             visible: element.visible ?? true,
+            locked: element.locked ?? false,
+            zIndex: element.zIndex
         }));
 
         console.log('[VirtualScreenViewer2] Layout:', layoutConfig);

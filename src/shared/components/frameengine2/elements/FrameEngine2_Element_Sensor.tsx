@@ -17,25 +17,9 @@
  * along with JunctionRelay. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import React, { useEffect } from 'react';
-
-/**
- * Load a Google Font dynamically
- */
-const loadGoogleFont = (fontFamily: string) => {
-    // Check if font is already loaded
-    const linkId = `google-font-${fontFamily.replace(/\s+/g, '-')}`;
-    if (document.getElementById(linkId)) {
-        return;
-    }
-
-    // Create link element to load the font
-    const link = document.createElement('link');
-    link.id = linkId;
-    link.rel = 'stylesheet';
-    link.href = `https://fonts.googleapis.com/css2?family=${fontFamily.replace(/\s+/g, '+')}:wght@400;700&display=swap`;
-    document.head.appendChild(link);
-};
+import React, { useEffect, useMemo } from 'react';
+import { loadGoogleFont } from '../FrameEngine2_FontLoader';
+import type { Alignment9Way } from '../types/FrameEngine2_ElementTypes';
 
 /**
  * Props for the Sensor element component
@@ -56,10 +40,11 @@ interface SensorElementProps {
         backgroundColor?: string;
         textAlign?: 'left' | 'center' | 'right';
         verticalAlign?: 'top' | 'center' | 'bottom';
+        alignment?: Alignment9Way;
         [key: string]: any;
     };
 
-    /** Resolved sensor values (Live > Test hierarchy already applied) */
+    /** Resolved sensor values (Live > Test > Placeholder hierarchy already applied) */
     resolvedValues: Record<string, any>;
 
     /** Whether to show placeholders when no data */
@@ -74,12 +59,30 @@ interface SensorElementProps {
 }
 
 /**
+ * Convert 9-way alignment to flexbox properties
+ */
+const getAlignmentStyles = (alignment: Alignment9Way) => {
+    const alignmentMap: Record<Alignment9Way, { alignItems: string; justifyContent: string }> = {
+        'top-left': { alignItems: 'flex-start', justifyContent: 'flex-start' },
+        'top-center': { alignItems: 'flex-start', justifyContent: 'center' },
+        'top-right': { alignItems: 'flex-start', justifyContent: 'flex-end' },
+        'middle-left': { alignItems: 'center', justifyContent: 'flex-start' },
+        'center': { alignItems: 'center', justifyContent: 'center' },
+        'middle-right': { alignItems: 'center', justifyContent: 'flex-end' },
+        'bottom-left': { alignItems: 'flex-end', justifyContent: 'flex-start' },
+        'bottom-center': { alignItems: 'flex-end', justifyContent: 'center' },
+        'bottom-right': { alignItems: 'flex-end', justifyContent: 'flex-end' }
+    };
+    return alignmentMap[alignment];
+};
+
+/**
  * Sensor Element - Displays live sensor values
  *
- * Data hierarchy:
- * 1. Live sensor data (highest priority)
- * 2. Test values (for testing in editor)
- * 3. Placeholder values (when no data available)
+ * Data hierarchy (handled by SensorTagManager):
+ * 1. Live sensor data (highest priority) - from WebSocket sensors payload
+ * 2. Test values (for testing in editor) - from layout.sensorTestValues
+ * 3. Placeholder values (when no data available) - from element properties
  */
 const FrameEngine2_Element_Sensor: React.FC<SensorElementProps> = ({
     properties,
@@ -102,7 +105,8 @@ const FrameEngine2_Element_Sensor: React.FC<SensorElementProps> = ({
         textColor = '#000000',
         backgroundColor = 'transparent',
         textAlign = 'left',
-        verticalAlign = 'center'
+        verticalAlign = 'center',
+        alignment = 'center'
     } = properties;
 
     // Load Google Font when needed
@@ -115,17 +119,47 @@ const FrameEngine2_Element_Sensor: React.FC<SensorElementProps> = ({
     // Format font family for CSS (add quotes if it contains spaces)
     const cssFontFamily = fontFamily.includes(' ') ? `"${fontFamily}"` : fontFamily;
 
-    // Get resolved value (hierarchy already applied by SensorTagManager)
-    let valueToDisplay: string | number | undefined;
-    let unitToDisplay: string = '';
+    // Get alignment styles (memoized for performance)
+    const alignmentStyles = useMemo(() => getAlignmentStyles(alignment), [alignment]);
 
-    if (sensorTag && resolvedValues[sensorTag] !== undefined && resolvedValues[sensorTag] !== null) {
-        valueToDisplay = resolvedValues[sensorTag];
-        unitToDisplay = placeholderUnit; // Unit not available in resolved values
-    }
+    // Derive text alignment from 9-way alignment for text content
+    const derivedTextAlign = useMemo(() => {
+        if (alignment.includes('left')) return 'left';
+        if (alignment.includes('right')) return 'right';
+        return 'center';
+    }, [alignment]);
 
-    // If no resolved value, use placeholder
-    if (valueToDisplay === undefined) {
+    /**
+     * Data priority hierarchy: LIVE > TEST > PLACEHOLDER
+     *
+     * Live/Test data structure (from resolvedValues):
+     *   { value: number|string, unit: string }  OR  just the value directly
+     *
+     * Placeholder data structure (from properties):
+     *   { placeholderSensorLabel, placeholderValue, placeholderUnit }
+     */
+    let labelToDisplay: string;
+    let valueToDisplay: string | number;
+    let unitToDisplay: string;
+
+    // Check if we have live or test data (resolvedValues hierarchy is already applied by SensorTagManager)
+    const resolvedData = sensorTag ? resolvedValues[sensorTag] : undefined;
+
+    if (resolvedData !== undefined && resolvedData !== null) {
+        // Live or Test data is available
+        if (typeof resolvedData === 'object' && 'value' in resolvedData) {
+            // Structured data with value and unit
+            valueToDisplay = resolvedData.value;
+            unitToDisplay = resolvedData.unit || '';
+            labelToDisplay = resolvedData.label || placeholderSensorLabel;
+        } else {
+            // Simple value (backwards compatibility)
+            valueToDisplay = resolvedData;
+            unitToDisplay = placeholderUnit;
+            labelToDisplay = placeholderSensorLabel;
+        }
+    } else {
+        // No live/test data - use placeholder
         if (!showPlaceholders) {
             return (
                 <div
@@ -148,12 +182,13 @@ const FrameEngine2_Element_Sensor: React.FC<SensorElementProps> = ({
                 </div>
             );
         }
+        labelToDisplay = placeholderSensorLabel;
         valueToDisplay = placeholderValue;
         unitToDisplay = placeholderUnit;
     }
 
-    // Build display string
-    const labelText = showLabel ? placeholderSensorLabel : '';
+    // Build display string based on showLabel/showUnit flags
+    const labelText = showLabel ? labelToDisplay : '';
     const valueText = valueToDisplay.toString();
     const unitText = showUnit ? unitToDisplay : '';
 
@@ -174,9 +209,9 @@ const FrameEngine2_Element_Sensor: React.FC<SensorElementProps> = ({
                 color: textColor,
                 backgroundColor,
                 display: 'flex',
-                alignItems: verticalAlign === 'top' ? 'flex-start' : verticalAlign === 'bottom' ? 'flex-end' : 'center',
-                justifyContent: textAlign === 'left' ? 'flex-start' : textAlign === 'right' ? 'flex-end' : 'center',
-                textAlign,
+                alignItems: alignmentStyles.alignItems,
+                justifyContent: alignmentStyles.justifyContent,
+                textAlign: derivedTextAlign,
                 wordWrap: 'break-word',
                 overflow: 'hidden'
             }}
