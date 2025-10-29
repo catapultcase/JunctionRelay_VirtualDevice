@@ -406,7 +406,9 @@ export const VirtualScreenViewer2Component: React.FC<VirtualScreenViewer2Compone
             >
                 <FrameEngine2_Renderer_Background layout={layout} />
 
-                {elements.map((element) => (
+                {elements
+                    .filter(element => element.visible)
+                    .map((element) => (
                     <FrameEngine2_Renderer_Elements
                         key={element.id}
                         element={element}
@@ -562,7 +564,9 @@ export const VirtualScreenViewer2Component: React.FC<VirtualScreenViewer2Compone
                     height: '100%',
                     zIndex: 1,
                 }}>
-                    {elements.map((element) => (
+                    {elements
+                        .filter(element => element.visible)
+                        .map((element) => (
                         <FrameEngine2_Renderer_Elements
                             key={element.id}
                             element={element}

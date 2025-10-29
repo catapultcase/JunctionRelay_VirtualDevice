@@ -25,12 +25,14 @@ import React, { useState, useRef, useMemo, useCallback, useEffect, lazy, Suspens
 import type { PlacedElement, GridSettings } from './types/FrameEngine2_LayoutTypes';
 import FrameEngine2_Element_Sensor from './elements/FrameEngine2_Element_Sensor';
 import FrameEngine2_Element_Text from './elements/FrameEngine2_Element_Text';
-import FrameEngine2_Element_Gauge from './elements/FrameEngine2_Element_Gauge';
 import FrameEngine2_Element_TimeDate from './elements/FrameEngine2_Element_TimeDate';
 import FrameEngine2_Element_MediaImage from './elements/FrameEngine2_Element_MediaImage';
 import FrameEngine2_Element_MediaVideo from './elements/FrameEngine2_Element_MediaVideo';
-import FrameEngine2_Element_MediaRive from './elements/FrameEngine2_Element_MediaRive';
-import FrameEngine2_Element_ECG from './elements/FrameEngine2_Element_ECG';
+
+// Lazy load heavy components to reduce initial bundle size
+const FrameEngine2_Element_Gauge = lazy(() => import('./elements/FrameEngine2_Element_Gauge')); // Uses Recharts (~100KB)
+const FrameEngine2_Element_MediaRive = lazy(() => import('./elements/FrameEngine2_Element_MediaRive')); // Uses Rive library (~150KB)
+const FrameEngine2_Element_ECG = lazy(() => import('./elements/FrameEngine2_Element_ECG')); // Heavy waveform rendering
 
 // Lazy load Moveable (120KB) - only needed when element is selected
 const Moveable = lazy(() => import('react-moveable'));
@@ -135,14 +137,16 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
 
             case 'gauge':
                 return (
-                    <FrameEngine2_Element_Gauge
-                        properties={element.properties}
-                        resolvedValues={resolvedValues}
-                        showPlaceholders={showPlaceholders}
-                        elementPadding={elementPadding}
-                        width={element.width}
-                        height={element.height}
-                    />
+                    <Suspense fallback={<div style={{ width: '100%', height: '100%', background: '#f5f5f5' }} />}>
+                        <FrameEngine2_Element_Gauge
+                            properties={element.properties}
+                            resolvedValues={resolvedValues}
+                            showPlaceholders={showPlaceholders}
+                            elementPadding={elementPadding}
+                            width={element.width}
+                            height={element.height}
+                        />
+                    </Suspense>
                 );
 
             case 'timedate':
@@ -175,23 +179,27 @@ const FrameEngine2_Renderer_Elements: React.FC<FrameEngine2_Renderer_ElementsPro
 
             case 'media-rive':
                 return (
-                    <FrameEngine2_Element_MediaRive
-                        properties={element.properties}
-                        width={element.width}
-                        height={element.height}
-                    />
+                    <Suspense fallback={<div style={{ width: '100%', height: '100%', background: '#f5f5f5' }} />}>
+                        <FrameEngine2_Element_MediaRive
+                            properties={element.properties}
+                            width={element.width}
+                            height={element.height}
+                        />
+                    </Suspense>
                 );
 
             case 'ecg':
                 return (
-                    <FrameEngine2_Element_ECG
-                        properties={element.properties}
-                        resolvedValues={resolvedValues}
-                        showPlaceholders={showPlaceholders}
-                        elementPadding={elementPadding}
-                        width={element.width}
-                        height={element.height}
-                    />
+                    <Suspense fallback={<div style={{ width: '100%', height: '100%', background: '#f5f5f5' }} />}>
+                        <FrameEngine2_Element_ECG
+                            properties={element.properties}
+                            resolvedValues={resolvedValues}
+                            showPlaceholders={showPlaceholders}
+                            elementPadding={elementPadding}
+                            width={element.width}
+                            height={element.height}
+                        />
+                    </Suspense>
                 );
 
             default:

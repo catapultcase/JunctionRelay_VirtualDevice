@@ -70,30 +70,33 @@ const FrameEngine2_Renderer_Background: React.FC<FrameEngine2_Renderer_Backgroun
 
     /**
      * Resolve image URL - convert local filenames to API endpoints
+     * Pass through blob URLs and HTTP URLs unchanged
      */
     const resolvedImageUrl = useMemo(() => {
         if (!layout.backgroundImageUrl) return undefined;
-        return layout.backgroundImageUrl.startsWith('http')
+        return (layout.backgroundImageUrl.startsWith('http') || layout.backgroundImageUrl.startsWith('blob:'))
             ? layout.backgroundImageUrl
             : `/api/frameengine/images/${layout.backgroundImageUrl}/content`;
     }, [layout.backgroundImageUrl]);
 
     /**
      * Resolve video URL - convert local filenames to API endpoints
+     * Pass through blob URLs and HTTP URLs unchanged
      */
     const resolvedVideoUrl = useMemo(() => {
         if (!layout.backgroundVideoUrl) return undefined;
-        return layout.backgroundVideoUrl.startsWith('http')
+        return (layout.backgroundVideoUrl.startsWith('http') || layout.backgroundVideoUrl.startsWith('blob:'))
             ? layout.backgroundVideoUrl
             : `/api/frameengine/videos/${layout.backgroundVideoUrl}/content`;
     }, [layout.backgroundVideoUrl]);
 
     /**
      * Resolve Rive URL - convert local filenames to API endpoints
+     * Pass through blob URLs and HTTP URLs unchanged
      */
     const resolvedRiveUrl = useMemo(() => {
         if (!layout.riveFile) return undefined;
-        return layout.riveFile.startsWith('http')
+        return (layout.riveFile.startsWith('http') || layout.riveFile.startsWith('blob:'))
             ? layout.riveFile
             : `/api/frameengine/rive/${layout.riveFile}/content`;
     }, [layout.riveFile]);
