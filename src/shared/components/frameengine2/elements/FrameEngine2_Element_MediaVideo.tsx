@@ -65,10 +65,11 @@ const FrameEngine2_Element_MediaVideo: React.FC<MediaVideoElementProps> = ({
 
     /**
      * Resolve video URL - convert filenames to API endpoints
+     * Pass through blob URLs and HTTP URLs unchanged
      */
     const resolvedVideoUrl = useMemo(() => {
         if (!filename) return undefined;
-        return filename.startsWith('http')
+        return (filename.startsWith('http') || filename.startsWith('blob:'))
             ? filename
             : `/api/frameengine/videos/${filename}/content`;
     }, [filename]);

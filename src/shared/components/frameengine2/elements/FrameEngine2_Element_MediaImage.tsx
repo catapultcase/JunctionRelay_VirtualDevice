@@ -59,10 +59,11 @@ const FrameEngine2_Element_MediaImage: React.FC<MediaImageElementProps> = ({
 
     /**
      * Resolve image URL - convert filenames to API endpoints
+     * Pass through blob URLs and HTTP URLs unchanged
      */
     const resolvedImageUrl = useMemo(() => {
         if (!filename) return undefined;
-        return filename.startsWith('http')
+        return (filename.startsWith('http') || filename.startsWith('blob:'))
             ? filename
             : `/api/frameengine/images/${filename}/content`;
     }, [filename]);
